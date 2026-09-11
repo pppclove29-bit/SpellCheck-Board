@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="ime_name">TypeRight 맞춤법 키보드</string>
+    <string name="subtype_ko_kr">한국어</string>
+</resources>

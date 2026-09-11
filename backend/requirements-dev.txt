@@ -1,0 +1,4 @@
+-r requirements.txt
+uvicorn[standard]>=0.52
+pytest>=9
+anyio>=4

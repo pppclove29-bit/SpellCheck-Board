@@ -1,0 +1,9 @@
+[project]
+name = "typeright-backend"
+version = "0.3.0"
+description = "TypeRight grammar-check API (FastAPI + Supabase, deployed on Vercel)"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

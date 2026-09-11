@@ -1,0 +1,39 @@
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/
+*.iml
+
+# Node
+node_modules/
+dist/
+coverage/
+.env
+.env.*
+!.env.example
+.vercel/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Android / Gradle
+.gradle/
+build/
+local.properties
+*.apk
+*.aab
+captures/
+.cxx/
+.kotlin/
+
+# iOS / Swift
+xcuserdata/
+DerivedData/
+*.xcworkspace/xcuserdata/
+.build/
+.swiftpm/
+*.xcodeproj/
+Pods/

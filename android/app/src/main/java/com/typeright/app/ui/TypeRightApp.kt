@@ -1,0 +1,76 @@
+package com.typeright.app.ui
+
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.typeright.keyboard.TypeRightServices
+import com.typeright.keyboard.account.AccountState
+import com.typeright.keyboard.settings.TypeRightSettings
+
+enum class AppTab(val label: String, val icon: String) {
+    ONBOARDING("시작하기", "⌨️"),
+    SHORTCUTS("단축어", "⚡"),
+    SETTINGS("설정", "⚙️"),
+    REWARD("AI 충전", "🎬"),
+    PRO("PRO", "👑"),
+}
+
+@Composable
+fun TypeRightApp(requestedTab: AppTab?, onRequestedTabConsumed: () -> Unit, focusTick: Int) {
+    val context = LocalContext.current
+    val services = remember { TypeRightServices.get(context) }
+    var tab by rememberSaveable { mutableStateOf(AppTab.ONBOARDING) }
+    val settings by services.settings.settings.collectAsStateWithLifecycle(initialValue = TypeRightSettings())
+    val account by services.account.account.collectAsStateWithLifecycle(initialValue = AccountState())
+
+    LaunchedEffect(requestedTab) {
+        if (requestedTab != null) {
+            tab = requestedTab
+            onRequestedTabConsumed()
+        }
+    }
+
+    // Host-app open: cache /v1/me (PRO + quota), then sync PRO shortcuts with Supabase.
+    LaunchedEffect(Unit) {
+        services.account.refresh()
+        services.shortcutSync.sync(services.account.current().isPro)
+    }
+
+    Scaffold(
+        bottomBar = {
+            NavigationBar {
+                AppTab.entries.forEach { t ->
+                    NavigationBarItem(
+                        selected = tab == t,
+                        onClick = { tab = t },
+                        icon = { Text(t.icon) },
+                        label = { Text(t.label) },
+                    )
+                }
+            }
+        },
+    ) { padding ->
+        Box(Modifier.padding(padding)) {
+            when (tab) {
+                AppTab.ONBOARDING -> OnboardingScreen(focusTick = focusTick)
+                AppTab.SHORTCUTS -> ShortcutsScreen(services, settings, account, onOpenPro = { tab = AppTab.PRO })
+                AppTab.SETTINGS -> SettingsScreen(services, settings, account)
+                AppTab.REWARD -> RewardScreen(services, account)
+                AppTab.PRO -> SubscriptionScreen(services, account)
+            }
+        }
+    }
+}

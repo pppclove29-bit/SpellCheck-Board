@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Keyboard body -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M30,40h48a4,4 0,0 1,4 4v22a4,4 0,0 1,-4 4h-48a4,4 0,0 1,-4 -4v-22a4,4 0,0 1,4 -4z" />
+    <!-- Check mark -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#2E6BE6"
+        android:strokeWidth="5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M42,55l8,8l16,-16" />
+</vector>
