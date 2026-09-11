@@ -1,10 +1,13 @@
 package com.typeright.app.ui
 
+import android.content.Intent
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
@@ -14,8 +17,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.typeright.app.reward.RewardAdActivity
 import com.typeright.keyboard.account.AccountState
 
 @Composable
@@ -73,4 +78,20 @@ fun AccountSummaryCard(account: AccountState, isDevAuth: Boolean, onRefresh: (()
             if (onRefresh != null) OutlinedButton(onClick = onRefresh) { Text("새로고침") }
         }
     }
+}
+
+/** ⚡충전 → RewardAdActivity (same popup the keyboard opens). Emphasized when today's quota is used up. */
+@Composable
+fun RechargeButton(account: AccountState, modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    val empty = account.quota?.remaining == 0
+    Button(
+        onClick = { context.startActivity(Intent(context, RewardAdActivity::class.java)) },
+        modifier = modifier.fillMaxWidth(),
+        colors = if (empty) {
+            ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+        } else {
+            ButtonDefaults.buttonColors()
+        },
+    ) { Text(if (empty) "⚡ 충전 — 오늘 AI 훈수를 다 썼어요" else "⚡ 광고 보고 훈수 3회 받기") }
 }

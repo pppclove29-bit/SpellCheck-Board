@@ -1,7 +1,7 @@
 import logging
 
 from fastapi import APIRouter, Depends, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 
 from app.api.container import Container, get_container
 from app.schemas import GrammarCheckRequest, GrammarCheckResponse, HealthResponse, MeResponse
@@ -25,6 +25,14 @@ async def me(request: Request, c: Container = Depends(get_container)) -> MeRespo
     user_id = await c.auth.authenticate(request.headers)
     quota = await c.quota_store.get_status(user_id)
     return MeResponse(user_id=user_id, is_pro=quota.is_pro, quota=quota)
+
+
+@router.delete("/v1/me", status_code=204)
+async def delete_me(request: Request, c: Container = Depends(get_container)) -> Response:
+    """Account deletion (Play policy). Cascades to quota, rewards, entitlements and shortcuts."""
+    user_id = await c.auth.authenticate(request.headers)
+    await c.account_deleter.delete(user_id)
+    return Response(status_code=204)
 
 
 @router.get("/v1/ads/admob-ssv")

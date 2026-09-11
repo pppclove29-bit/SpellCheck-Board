@@ -7,7 +7,10 @@ Backend(Vercel Serverless + Supabase) ↔ 키보드(Android/iOS) 간 단일 계�
 - 호스팅: Vercel Serverless Functions (`backend/api/**`). Base URL은 환경별 설정 (로컬 dev 서버: Android 에뮬레이터 `http://10.0.2.2:8790`, 호스트에서 `http://localhost:8790`).
 - Content-Type: `application/json; charset=utf-8`
 - **인증**: `Authorization: Bearer <Supabase access token>`
-  - 클라이언트는 최초 실행 시 Supabase **익명 로그인**(`signInAnonymously()`)으로 세션을 만들고, access token 만료 시 refresh token으로 갱신한다. 키보드 확장/IME와 호스트 앱은 같은 세션을 공유 저장소(Android 동일 APK 저장소 / iOS App Group Keychain)로 공유한다.
+  - MVP 로그인은 **구글 소셜 로그인 1종**. 호스트 앱에서 Credential Manager로 Google ID 토큰을 받아 `POST {SUPABASE_URL}/auth/v1/token?grant_type=id_token` (`{"provider":"google","id_token","nonce"}`)으로 Supabase 세션을 만들고, 만료 시 refresh token으로 갱신한다. IME는 같은 APK 저장소의 세션을 읽기만 한다.
+  - **익명 토큰(`is_anonymous: true`)은 401** — 익명 계정 무한 생성으로 무료 횟수를 파밍하는 것을 막는다.
+  - 로그아웃 상태의 키보드: 온디바이스 검사만 동작, "로그인하면 AI 훈수" 칩 → 호스트 앱.
+  - 모든 로그아웃 경로(수동, 401 반복, refresh 토큰 폐기, 계정 삭제)에서 기기의 사용자 데이터(커스텀 단축어·동기화 대기 상태·계정 캐시)를 지운다. 같은 기기에서 다른 계정이 로그인해 이전 사용자의 단축어를 동기화하는 것을 막는다. PRO 단축어는 다음 로그인 때 서버에서 복원된다.
   - 서버는 JWT의 `sub`를 `user_id`로 사용한다. 요청 body의 `user_id`는 V4 기획서 호환용으로 받되 **무시**한다 (위조로 타인 쿼터·PRO 사용 방지).
 - 헤더 `X-Client-Platform`: `android` | `ios` (선택, 로깅용)
 - **모든 offset/length는 UTF-16 code unit 기준** (JS `String`, Kotlin `String`, Swift `NSString`/`String.utf16`). 한글 음절은 BMP이므로 1음절 = 1 unit.
@@ -32,9 +35,10 @@ Backend(Vercel Serverless + Supabase) ↔ 키보드(Android/iOS) 간 단일 계�
 |---|---|---|---|
 | `spicy_wit` (기본) | 매운맛 훈수 | 유쾌한 팩트폭격·위트 한 문장 | 상단 말풍선 애니메이션 |
 | `police` | 맞춤법 경찰 | 짧고 단호한 경고 | 오류 감지 시 사이렌 햅틱. **PRO**: 교정 칩 탭 또는 '무시' 탭 전까지 스페이스바·엔터·`. ! ?` 입력 차단. **무료**: 햅틱 경고만 |
+
+- **'무시' = 현재 문장 전체에서 경찰 모드 해제** (차단·햅틱 없음, 교정 칩은 계속 표시). 새 문장이 시작되면 다시 적용. 룰 사전 오탐 시 유저가 갇히지 않게 하는 탈출구로 항상 제공.
 | `gentle` | 상냥한 선생님 | 정중한 설명 + 문법 원리 팁 | 팁 카드 |
 
-- 경찰 모드 '무시' 버튼은 오탐(false positive) 탈출구로 항상 제공한다 (해당 span을 현재 문장에서 무시 목록에 추가).
 
 ## POST /v1/grammar-check
 
@@ -90,8 +94,15 @@ Response `200`
 
 - 무료: AI 훈수 **하루 5회** (KST 자정 리셋). **AI가 오류를 찾아 훈수를 전달한 경우(`ai_status=used` && `has_error`)에만 1회 차감** — 오류 없는 문장은 차감하지 않는다.
 - AdMob 보상형 광고 1회 시청 = 당일 +3회 (하루 최대 5회 시청).
-- PRO(월 2,900원 / 연 19,900원): 무제한 (서버 fair-use 상한 300회/일), 경찰 모드 풀버전, 커스텀 단축어 저장.
+- PRO: 무제한 (서버 fair-use 상한 300회/일), 경찰 모드 풀버전, 커스텀 단축어 등록·편집.
+  - 인앱 상품 ID: `typeright_pro_monthly` (월 2,900원), `typeright_pro_yearly` (연 19,900원)
+- 단축어: 기본 단축어 3개(ㅈㅅ→죄송합니다, ㄱㅅ→감사합니다, ㅇㅋ→알겠습니다)는 모두 사용 가능(읽기 전용). 추가 등록·편집·삭제는 PRO 전용.
 - 온디바이스 규칙 교정은 항상 무료·무제한.
+- AI 기능은 기본 OFF. 켤 때 "입력 문장이 TypeRight 서버와 OpenAI로 전송된다"는 고지·동의 필수 (Google Play 눈에 띄는 고지 정책). 동의 전에는 AI 요청을 보내지 않는다.
+
+### 충전 UX
+
+키보드 상단 툴팁 우측 **[⚡️충전]** 버튼 (로그인한 무료 유저, 잔여 0이면 강조) → 호스트 앱 `RewardAdActivity`(다이얼로그형, 별도 task) → "광고 보고 훈수 3회 받기" 팝업 → 시청 완료 → SSV 적립 확인(`GET /v1/me` 폴링) → 종료하면 입력하던 앱·키보드로 복귀.
 
 ## GET /v1/me
 
@@ -100,6 +111,10 @@ Response `200`
 { "user_id": "uuid", "is_pro": false, "quota": { "is_pro": false, "limit": 5, "used": 1, "bonus": 3, "remaining": 7 } }
 ```
 키보드/호스트 앱은 시작 시·광고 시청 후·결제 후 호출해 PRO 여부와 잔여 횟수를 캐시한다.
+
+## DELETE /v1/me
+
+계정 삭제 (Google Play 계정 삭제 정책). Supabase auth 사용자를 삭제하면 쿼터·광고 원장·PRO·단축어가 모두 연쇄 삭제된다. 성공 `204` (이미 없는 계정도 `204`). 활성 구독은 해지되지 않으므로 앱이 "Play 스토어에서 구독을 따로 해지해야 한다"고 안내한다. 클라이언트는 성공 후 세션과 로컬 사용자 데이터를 지운다.
 
 ## GET /v1/ads/admob-ssv
 
@@ -147,10 +162,11 @@ AdMob 보상형 광고 **서버 측 확인(SSV) 콜백** 전용 (클라이언트
 | 키 입력 후 300ms 무입력 (debounce) | 온디바이스 규칙 검사 → 교정 칩 + 모드별 피드백 |
 | 스페이스바 | debounce 즉시 flush → 온디바이스 검사. 경찰 모드(PRO)에서 미교정 오류가 남아 있으면 햅틱 + 입력 차단 |
 | `.` `!` `?` 줄바꿈 | 온디바이스 검사(경찰 차단 동일 적용) + 네트워크 허용 & (`is_pro` 또는 `remaining > 0`) & 직전 AI 요청과 텍스트가 다를 때 `/v1/grammar-check` (현재 문장) |
-| `ai_status=quota_exceeded` | "광고 보고 3회 충전" 칩 → 호스트 앱 딥링크 |
+| `ai_status=quota_exceeded` | [⚡️충전] 버튼 강조 → `RewardAdActivity` |
 | 보안 필드 | 캡처·검사·네트워크·경찰 차단 전면 중단 (일반 키보드처럼 동작) |
 
 - 검사 대상 텍스트: 커서 이전 최대 300자 중 마지막 문장 (`. ! ? \n` 기준).
 - 응답 유효성(stale guard): 요청 시 검사한 문장 텍스트(뒤쪽 공백 제외)와 문서 내 절대 시작 위치를 스냅샷으로 저장. 응답 도착 시 현재 문서의 같은 위치에 같은 문장 텍스트가 그대로 있으면 **유효** — 그 뒤에 이어서 입력한 내용(스페이스, 다음 문장)은 무관. 문장 내부가 수정됐거나 위치가 밀렸으면 폐기.
-- 경찰 모드 차단 판단(PRO): 보안 필드 아님 && 현재 문장에 무시되지 않은 미교정 교정이 1개 이상 → 스페이스/엔터/`. ! ?` 입력을 삼키고 햅틱 재생. 교정 칩 적용 또는 '무시' 탭 시 해당 교정 해제. 무시 목록 키 = (문서 내 절대 위치, original_word); 문장 시작 위치가 바뀌면 초기화.
+- 경찰 모드 차단 판단(PRO): 보안 필드 아님 && 현재 문장에 무시되지 않은 미교정 교정이 1개 이상 → 스페이스/엔터/`. ! ?` 입력을 삼키고 햅틱 재생. 교정 칩 적용 시 해당 교정 해제. '무시' 탭 시 현재 문장 전체 해제 — 키 = 문장의 문서 내 절대 시작 위치, 새 문장 시작 또는 문장 시작 위치 이동 시 초기화.
+- 천지인 자음 반복: 같은 자음 키를 300ms 안에 다시 누르면 순환(ㄱ→ㅋ→ㄲ), 300ms 지나면 새 자음(ㄱ, 멈춤, ㄱ = ㄱㄱ).
 - iOS: 네트워크와 햅틱(`UINotificationFeedbackGenerator`) 모두 **전체 접근 허용**이 필요. 미허용 시 온디바이스 검사 + 시각적 경고만.

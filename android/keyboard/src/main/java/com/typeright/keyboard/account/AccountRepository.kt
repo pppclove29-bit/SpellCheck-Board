@@ -70,6 +70,19 @@ class AccountRepository internal constructor(
         }
     }
 
+    /** Drops the cached account (sign-out / account deletion). */
+    suspend fun clear() {
+        dataStore.edit { p ->
+            p.remove(USER_ID)
+            p.remove(IS_PRO)
+            p.remove(FETCHED_AT)
+            p.remove(LIMIT)
+            p.remove(USED)
+            p.remove(BONUS)
+            p.remove(REMAINING)
+        }
+    }
+
     private fun writeQuota(p: androidx.datastore.preferences.core.MutablePreferences, q: Quota) {
         p[LIMIT] = q.limit
         p[USED] = q.used

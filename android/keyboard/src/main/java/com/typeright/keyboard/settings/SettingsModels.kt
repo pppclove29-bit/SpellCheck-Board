@@ -13,17 +13,21 @@ enum class KeyboardLanguage { KOREAN, ENGLISH }
 data class Shortcut(val key: String, val expansion: String)
 
 data class TypeRightSettings(
-    val aiEnabled: Boolean = true,
+    /** AI features are OFF by default; turning them on requires the data-transfer consent (Play prominent disclosure). */
+    val aiEnabled: Boolean = false,
+    /** When the user agreed to the AI data-transfer disclosure, or null if never. */
+    val aiConsentAtMillis: Long? = null,
     val feedbackMode: FeedbackMode = FeedbackMode.DEFAULT,
-    val shortcuts: List<Shortcut> = DEFAULT_SHORTCUTS,
+    /** Custom (PRO) shortcuts only; the read-only built-ins are [ShortcutRules.BUILT_IN]. */
+    val shortcuts: List<Shortcut> = emptyList(),
     val koreanLayout: KoreanLayout = KoreanLayout.DUBEOLSIK,
     val lastLanguage: KeyboardLanguage = KeyboardLanguage.KOREAN,
 ) {
-    companion object {
-        val DEFAULT_SHORTCUTS = listOf(
-            Shortcut("ㅈㅅ", "죄송합니다"),
-            Shortcut("ㄱㅅ", "감사합니다"),
-            Shortcut("ㅇㅋ", "알겠습니다"),
-        )
-    }
+    val aiConsented: Boolean get() = aiConsentAtMillis != null
+
+    /** AI network calls are allowed only when the toggle is on AND consent was recorded. */
+    val aiActive: Boolean get() = aiEnabled && aiConsented
+
+    /** Built-ins (everyone) + custom (PRO) — what the keyboard matches against. */
+    val allShortcuts: List<Shortcut> get() = ShortcutRules.BUILT_IN + shortcuts
 }

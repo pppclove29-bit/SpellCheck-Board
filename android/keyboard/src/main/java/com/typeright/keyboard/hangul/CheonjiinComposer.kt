@@ -24,10 +24,15 @@ enum class CheonjiinStroke(val symbol: Char) {
  * Vowels are built from strokes (ㅏ=ㅣㆍ, ㅓ=ㆍㅣ, ㅗ=ㆍㅡ, ㅜ=ㅡㆍ, ㅑ=ㅣㆍㆍ, ㅕ=ㆍㆍㅣ, ㅛ=ㆍㆍㅡ, ㅠ=ㅡㆍㆍ,
  * ㅐ=ㅏㅣ, ㅔ=ㅓㅣ, ㅒ=ㅑㅣ, ㅖ=ㅕㅣ, ㅘ=ㅗㅏ, ㅙ=ㅘㅣ, ㅚ=ㅗㅣ, ㅝ=ㅜㅓ, ㅞ=ㅝㅣ, ㅟ=ㅜㅣ, ㅢ=ㅡㅣ).
  * A lone ㆍ/ㆍㆍ is shown pending after the composing text until the next stroke resolves it.
- * Repeated taps on the same consonant key cycle its consonants (ㄱ→ㅋ→ㄲ→ㄱ).
+ * Taps on the same consonant key within [CYCLE_WINDOW_MS] cycle its consonants (ㄱ→ㅋ→ㄲ→ㄱ); after an idle pause
+ * the same key starts a new consonant (ㄱ, pause, ㄱ = ㄱㄱ). The clock is injectable for tests.
  */
-class CheonjiinComposer : Composer {
+class CheonjiinComposer(
+    private val nowMillis: () -> Long = { System.nanoTime() / 1_000_000 },
+    private val cycleWindowMillis: Long = CYCLE_WINDOW_MS,
+) : Composer {
     private val hangul = HangulComposer(combineVowels = false)
+    private var lastConsonantAt = 0L
 
     /** 0 = none, 1 = ㆍ, 2 = ㆍㆍ. */
     private var pendingDots = 0
@@ -41,7 +46,11 @@ class CheonjiinComposer : Composer {
 
     fun inputConsonant(key: CheonjiinConsonantKey): ComposeResult {
         pendingDots = 0 // a dangling ㆍ before a consonant is meaningless; drop it
-        val result = if (key == lastConsonantKey) {
+        val now = nowMillis()
+        // Same key again within the window cycles (ㄱ→ㅋ→ㄲ); after an idle pause it starts a new consonant.
+        val cycling = key == lastConsonantKey && now - lastConsonantAt <= cycleWindowMillis
+        lastConsonantAt = now
+        val result = if (cycling) {
             cycleIndex = (cycleIndex + 1) % key.cycle.size
             hangul.backspace() // removes the consonant produced by the previous tap
             hangul.input(key.cycle[cycleIndex])
@@ -115,6 +124,9 @@ class CheonjiinComposer : Composer {
 
     companion object {
         private const val DOT = "ㆍ"
+
+        /** Repeated taps of the same consonant key within this window cycle; slower taps start a new consonant. */
+        const val CYCLE_WINDOW_MS = 300L
 
         /** (current vowel, stroke) -> new vowel. */
         val COMBINATIONS: Map<Pair<Char, Char>, Char> = mapOf(

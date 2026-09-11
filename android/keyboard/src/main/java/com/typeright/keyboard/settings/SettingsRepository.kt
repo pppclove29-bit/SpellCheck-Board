@@ -5,6 +5,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.typeright.keyboard.rules.FeedbackMode
@@ -25,9 +26,10 @@ class SettingsRepository private constructor(private val dataStore: DataStore<Pr
     val settings: Flow<TypeRightSettings> = dataStore.data
         .map { p ->
             TypeRightSettings(
-                aiEnabled = p[Keys.AI_ENABLED] ?: true,
+                aiEnabled = p[Keys.AI_ENABLED] ?: false,
+                aiConsentAtMillis = p[Keys.AI_CONSENT_AT],
                 feedbackMode = FeedbackMode.fromApi(p[Keys.FEEDBACK_MODE]) ?: FeedbackMode.DEFAULT,
-                shortcuts = ShortcutCodec.decode(p[Keys.SHORTCUTS]) ?: TypeRightSettings.DEFAULT_SHORTCUTS,
+                shortcuts = customShortcuts(p),
                 koreanLayout = p[Keys.KOREAN_LAYOUT]?.let { v -> KoreanLayout.entries.firstOrNull { it.name == v } }
                     ?: KoreanLayout.DUBEOLSIK,
                 lastLanguage = p[Keys.LAST_LANGUAGE]?.let { v -> KeyboardLanguage.entries.firstOrNull { it.name == v } }
@@ -36,8 +38,16 @@ class SettingsRepository private constructor(private val dataStore: DataStore<Pr
         }
         .distinctUntilChanged()
 
-    suspend fun setAiEnabled(enabled: Boolean) {
-        dataStore.edit { it[Keys.AI_ENABLED] = enabled }
+    /** Turning AI on is only possible together with recording the data-transfer consent. */
+    suspend fun enableAiWithConsent(consentAtMillis: Long) {
+        dataStore.edit {
+            it[Keys.AI_CONSENT_AT] = consentAtMillis
+            it[Keys.AI_ENABLED] = true
+        }
+    }
+
+    suspend fun disableAi() {
+        dataStore.edit { it[Keys.AI_ENABLED] = false }
     }
 
     suspend fun setFeedbackMode(mode: FeedbackMode) {
@@ -53,12 +63,13 @@ class SettingsRepository private constructor(private val dataStore: DataStore<Pr
     }
 
     /**
-     * Adds or replaces a shortcut. When [replacingKey] is given, that entry is replaced in place (a renamed key
+     * Adds or replaces a custom shortcut. When [replacingKey] is given, that entry is replaced in place (a renamed key
      * tombstones the old one for sync). PRO only — gated in the host app UI.
      */
     suspend fun upsertShortcut(shortcut: Shortcut, replacingKey: String? = null) {
+        require(!ShortcutRules.isBuiltIn(shortcut.key)) { "built-in shortcuts are read-only" }
         dataStore.edit { p ->
-            val current = ShortcutCodec.decode(p[Keys.SHORTCUTS]) ?: TypeRightSettings.DEFAULT_SHORTCUTS
+            val current = customShortcuts(p)
             val target = replacingKey ?: shortcut.key
             val index = current.indexOfFirst { it.key == target }
             val updated = if (index >= 0) current.toMutableList().also { it[index] = shortcut } else current + shortcut
@@ -71,14 +82,13 @@ class SettingsRepository private constructor(private val dataStore: DataStore<Pr
 
     suspend fun deleteShortcut(key: String) {
         dataStore.edit { p ->
-            val current = ShortcutCodec.decode(p[Keys.SHORTCUTS]) ?: TypeRightSettings.DEFAULT_SHORTCUTS
-            p[Keys.SHORTCUTS] = ShortcutCodec.encode(current.filterNot { it.key == key })
+            p[Keys.SHORTCUTS] = ShortcutCodec.encode(customShortcuts(p).filterNot { it.key == key })
             p[Keys.SHORTCUT_TOMBSTONES] = encodeKeys(decodeKeys(p[Keys.SHORTCUT_TOMBSTONES]) + key)
         }
     }
 
-    suspend fun currentShortcuts(): List<Shortcut> =
-        ShortcutCodec.decode(dataStore.data.first()[Keys.SHORTCUTS]) ?: TypeRightSettings.DEFAULT_SHORTCUTS
+    /** Custom shortcuts (what sync uploads). */
+    suspend fun currentShortcuts(): List<Shortcut> = customShortcuts(dataStore.data.first())
 
     /** Keys deleted locally whose remote rows still need deleting. */
     suspend fun shortcutTombstones(): Set<String> = decodeKeys(dataStore.data.first()[Keys.SHORTCUT_TOMBSTONES])
@@ -91,11 +101,22 @@ class SettingsRepository private constructor(private val dataStore: DataStore<Pr
     /** Adds remote-only shortcuts pulled by sync; never overwrites local entries (local is the source of truth). */
     suspend fun addShortcutsIfAbsent(pulled: List<Shortcut>) {
         dataStore.edit { p ->
-            val current = ShortcutCodec.decode(p[Keys.SHORTCUTS]) ?: TypeRightSettings.DEFAULT_SHORTCUTS
+            val current = customShortcuts(p)
             val keys = current.mapTo(HashSet()) { it.key }
-            p[Keys.SHORTCUTS] = ShortcutCodec.encode(current + pulled.filter { it.key !in keys })
+            p[Keys.SHORTCUTS] = ShortcutCodec.encode(current + pulled.filter { it.key !in keys && !ShortcutRules.isBuiltIn(it.key) })
         }
     }
+
+    /** Account deletion: drops user data stored on the device (custom shortcuts + pending sync state). */
+    suspend fun clearUserData() {
+        dataStore.edit { p ->
+            p.remove(Keys.SHORTCUTS)
+            p.remove(Keys.SHORTCUT_TOMBSTONES)
+        }
+    }
+
+    private fun customShortcuts(p: Preferences): List<Shortcut> =
+        ShortcutCodec.decode(p[Keys.SHORTCUTS])?.filterNot { ShortcutRules.isBuiltIn(it.key) } ?: emptyList()
 
     private fun decodeKeys(value: String?): Set<String> =
         value?.split('\n')?.filter { it.isNotEmpty() }?.toSet() ?: emptySet()
@@ -104,6 +125,7 @@ class SettingsRepository private constructor(private val dataStore: DataStore<Pr
 
     private object Keys {
         val AI_ENABLED = booleanPreferencesKey("ai_enabled")
+        val AI_CONSENT_AT = longPreferencesKey("ai_consent_at")
         val FEEDBACK_MODE = stringPreferencesKey("feedback_mode")
         val SHORTCUTS = stringPreferencesKey("shortcuts_json")
         val SHORTCUT_TOMBSTONES = stringPreferencesKey("shortcut_tombstones")

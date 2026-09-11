@@ -35,8 +35,8 @@ import com.typeright.keyboard.settings.TypeRightSettings
 import kotlinx.coroutines.launch
 
 /**
- * 단축어 관리. Expansion works for everyone; saving custom shortcuts (add/edit/delete) is PRO — non-PRO users see a
- * paywall placeholder instead of the editor. PRO edits are synced to Supabase right after saving.
+ * 단축어. The 3 built-ins (ㅈㅅ/ㄱㅅ/ㅇㅋ) work for everyone and are read-only. Adding/editing/deleting custom
+ * shortcuts is PRO — free users get the paywall card when they tap "추가". PRO edits sync to Supabase right away.
  */
 @Composable
 fun ShortcutsScreen(
@@ -48,6 +48,7 @@ fun ShortcutsScreen(
     val scope = rememberCoroutineScope()
     var editing by remember { mutableStateOf<Shortcut?>(null) }
     var creating by remember { mutableStateOf(false) }
+    var showPaywall by remember { mutableStateOf(false) }
     var syncMessage by remember { mutableStateOf<String?>(null) }
 
     fun syncAfterEdit() {
@@ -62,33 +63,31 @@ fun ShortcutsScreen(
 
     Column(Modifier.fillMaxSize().padding(20.dp)) {
         ScreenTitle("단축어", "키보드에서 단축어를 입력하면 제안 칩이 떠요. 칩을 누르면 문구로 바뀌어요.")
-
-        if (account.isPro) {
-            Button(onClick = { creating = true }, modifier = Modifier.fillMaxWidth()) { Text("+ 단축어 추가") }
-            syncMessage?.let {
-                Text(it, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 6.dp))
-            }
-        } else {
-            SectionCard(container = MaterialTheme.colorScheme.tertiaryContainer) {
-                Text("👑 커스텀 단축어 저장은 PRO 전용이에요", fontWeight = FontWeight.SemiBold)
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    "PRO로 업그레이드하면 나만의 단축어를 추가·수정하고 여러 기기에 동기화할 수 있어요. " +
-                        "아래 기본 단축어는 무료로 계속 쓸 수 있어요.",
-                    style = MaterialTheme.typography.bodySmall,
-                )
-                Spacer(Modifier.height(8.dp))
-                Button(onClick = onOpenPro) { Text("PRO 알아보기") }
-            }
-        }
+        Button(
+            onClick = { if (account.isPro) creating = true else showPaywall = true },
+            modifier = Modifier.fillMaxWidth(),
+        ) { Text(if (account.isPro) "+ 단축어 추가" else "+ 단축어 추가 (PRO)") }
+        syncMessage?.let { Text(it, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 6.dp)) }
 
         Spacer(Modifier.height(8.dp))
         LazyColumn(Modifier.fillMaxWidth()) {
-            items(settings.shortcuts, key = { it.key }) { s ->
-                Row(Modifier.fillMaxWidth().padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(s.key, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Text("  →  ", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text(s.expansion, modifier = Modifier.weight(1f), maxLines = 2)
+            item { SectionLabel("기본 단축어 · 누구나 사용") }
+            items(ShortcutRules.BUILT_IN, key = { "builtin:${it.key}" }) { s ->
+                ShortcutRow(s, trailing = { Text("기본", style = MaterialTheme.typography.labelSmall) })
+            }
+            item { SectionLabel(if (account.isPro) "내 단축어" else "내 단축어 · PRO") }
+            if (settings.shortcuts.isEmpty()) {
+                item {
+                    Text(
+                        "아직 없어요.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(vertical = 8.dp),
+                    )
+                }
+            }
+            items(settings.shortcuts, key = { "custom:${it.key}" }) { s ->
+                ShortcutRow(s, trailing = {
                     if (account.isPro) {
                         TextButton(onClick = { editing = s }) { Text("수정") }
                         TextButton(onClick = {
@@ -98,10 +97,29 @@ fun ShortcutsScreen(
                             }
                         }) { Text("삭제") }
                     }
-                }
-                HorizontalDivider()
+                })
             }
         }
+    }
+
+    if (showPaywall) {
+        AlertDialog(
+            onDismissRequest = { showPaywall = false },
+            title = { Text("👑 커스텀 단축어는 PRO 전용이에요") },
+            text = {
+                Text(
+                    "PRO로 업그레이드하면 나만의 단축어를 추가·수정하고 여러 기기에 동기화할 수 있어요. " +
+                        "기본 단축어(ㅈㅅ·ㄱㅅ·ㅇㅋ)는 무료로 계속 쓸 수 있어요.",
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showPaywall = false
+                    onOpenPro()
+                }) { Text("PRO 알아보기") }
+            },
+            dismissButton = { TextButton(onClick = { showPaywall = false }) { Text("닫기") } },
+        )
     }
 
     if (account.isPro && (creating || editing != null)) {
@@ -122,6 +140,29 @@ fun ShortcutsScreen(
                 }
             },
         )
+    }
+}
+
+@Composable
+private fun SectionLabel(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.labelLarge,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
+    )
+}
+
+@Composable
+private fun ShortcutRow(s: Shortcut, trailing: @Composable () -> Unit) {
+    Column {
+        Row(Modifier.fillMaxWidth().padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(s.key, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text("  →  ", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(s.expansion, modifier = Modifier.weight(1f), maxLines = 2)
+            trailing()
+        }
+        HorizontalDivider()
     }
 }
 
@@ -148,7 +189,7 @@ private fun ShortcutDialog(
                         key = it
                         touched = true
                     },
-                    label = { Text("단축어 (예: ㅈㅅ)") },
+                    label = { Text("단축어 (예: ㅂㅂ)") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -159,7 +200,7 @@ private fun ShortcutDialog(
                         expansion = it
                         touched = true
                     },
-                    label = { Text("바꿀 문구 (예: 죄송합니다)") },
+                    label = { Text("바꿀 문구 (예: 바이바이)") },
                     modifier = Modifier.fillMaxWidth(),
                     minLines = 2,
                 )

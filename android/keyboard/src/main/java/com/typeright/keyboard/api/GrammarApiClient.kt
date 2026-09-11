@@ -78,6 +78,10 @@ class GrammarApiClient(
     suspend fun me(): ApiResult<MeResponse> =
         send("GET", "/v1/me", null, CHECK_CONNECT_TIMEOUT_MS, CHECK_READ_TIMEOUT_MS) { parseMe(it) }
 
+    /** Account deletion: `DELETE /v1/me` with the bearer token → 204. */
+    suspend fun deleteMe(): ApiResult<Unit> =
+        send("DELETE", "/v1/me", null, CHECK_CONNECT_TIMEOUT_MS, CHECK_READ_TIMEOUT_MS) { }
+
     private suspend fun <T> send(
         method: String,
         path: String,
@@ -106,13 +110,19 @@ class GrammarApiClient(
                 // e.g. SecurityException (cleartext blocked), IllegalArgumentException (bad URL)
                 return ApiResult.Failure(ApiResult.Failure.Kind.NETWORK, message = e.message)
             }
-            if (response.code == 401 && attempt == 0) {
-                attempt++
-                authHeaders = auth.authHeadersAfterUnauthorized()
-                    ?: return ApiResult.Failure(ApiResult.Failure.Kind.UNAUTHENTICATED, 401)
-                continue
+            if (response.code == 401) {
+                if (attempt == 0) {
+                    // Refresh once and retry. A failed refresh has already signed out (token revoked) or kept the
+                    // session for later (offline), so no extra handling here.
+                    attempt++
+                    authHeaders = auth.authHeadersAfterUnauthorized()
+                        ?: return ApiResult.Failure(ApiResult.Failure.Kind.UNAUTHENTICATED, 401)
+                    continue
+                }
+                // Still 401 with a fresh token: the backend no longer accepts this session → signed-out state.
+                auth.onAuthRejected()
+                return ApiResult.Failure(ApiResult.Failure.Kind.UNAUTHENTICATED, 401)
             }
-            if (response.code == 401) return ApiResult.Failure(ApiResult.Failure.Kind.UNAUTHENTICATED, 401)
             if (response.code !in 200..299) {
                 return ApiResult.Failure(ApiResult.Failure.Kind.HTTP, response.code, errorCode(response.body))
             }

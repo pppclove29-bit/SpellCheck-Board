@@ -30,17 +30,27 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
+import com.typeright.app.auth.rememberGoogleSignIn
 import com.typeright.app.ime.ImeStatus
+import com.typeright.keyboard.TypeRightServices
+import com.typeright.keyboard.auth.AuthState
+import com.typeright.keyboard.settings.TypeRightSettings
 
 /**
- * Android onboarding: enable the keyboard in system settings, then select it. (There is no iOS-style "Full Access"
- * on Android; the system shows its standard third-party keyboard privacy warning when enabling.)
+ * Android onboarding: enable the keyboard in system settings, select it, sign in with Google, optionally turn AI on.
+ * (There is no iOS-style "Full Access" on Android; the system shows its standard third-party keyboard warning.)
  */
 @Composable
-fun OnboardingScreen(focusTick: Int) {
+fun OnboardingScreen(
+    services: TypeRightServices,
+    settings: TypeRightSettings,
+    authState: AuthState,
+    focusTick: Int,
+) {
     val context = LocalContext.current
     var status by remember { mutableStateOf(ImeStatus.read(context)) }
     var testText by remember { mutableStateOf("") }
+    val signIn = rememberGoogleSignIn(services)
 
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { status = ImeStatus.read(context) }
     LaunchedEffect(focusTick) { status = ImeStatus.read(context) }
@@ -51,7 +61,7 @@ fun OnboardingScreen(focusTick: Int) {
             .verticalScroll(rememberScrollState())
             .padding(20.dp),
     ) {
-        ScreenTitle("TypeRight 시작하기", "맞춤법을 고쳐 주는 AI 키보드를 두 단계로 설정해요.")
+        ScreenTitle("TypeRight 시작하기", "맞춤법을 고쳐 주는 AI 키보드를 설정해요.")
 
         StepCard(
             number = 1,
@@ -76,7 +86,7 @@ fun OnboardingScreen(focusTick: Int) {
             Text(
                 "• TypeRight는 입력 내용을 저장하지 않아요.\n" +
                     "• 비밀번호·보안 입력란과 시크릿 모드에서는 검사·네트워크를 완전히 끄고 '보안 키패드'로 동작해요.\n" +
-                    "• 맞춤법 규칙 검사는 기기 안에서 해요. AI 훈수는 문장이 끝났을 때 그 문장만 보내며, 전화번호 등 개인정보는 서버에서 가려져요.",
+                    "• 맞춤법 규칙 검사는 기기 안에서 해요. AI 훈수는 직접 켜고 동의한 경우에만 문장을 서버로 보내요.",
                 style = MaterialTheme.typography.bodySmall,
             )
         }
@@ -90,6 +100,38 @@ fun OnboardingScreen(focusTick: Int) {
             enabled = status.enabled,
             onClick = { context.getSystemService(InputMethodManager::class.java)?.showInputMethodPicker() },
         )
+
+        when (authState) {
+            is AuthState.Dev -> SectionCard {
+                Text("3️⃣ 로그인 (개발 모드)", fontWeight = FontWeight.SemiBold)
+                Text(
+                    "SUPABASE_URL이 비어 있어 로그인 없이 X-Dev-User-Id(${authState.userId})로 동작해요.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+            else -> StepCard(
+                number = 3,
+                title = "Google로 로그인",
+                done = authState is AuthState.SignedIn,
+                doneText = (authState as? AuthState.SignedIn)?.let { "로그인됨 · ${it.email ?: "Google 계정"}" },
+                description = "로그인하면 AI 훈수·충전·PRO를 쓸 수 있어요. 로그인하지 않아도 기기 안 맞춤법 검사는 무료로 돼요.",
+                buttonLabel = if (signIn.busy) "로그인 중…" else "Google로 로그인",
+                enabled = !signIn.busy,
+                onClick = signIn::signIn,
+                footer = signIn.message,
+            )
+        }
+
+        SectionCard {
+            Text("4️⃣ AI 훈수 켜기 (선택)", fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(6.dp))
+            AiToggleRow(
+                services,
+                settings,
+                title = "AI 훈수",
+                description = "기본값은 꺼짐이에요. 켜면 문장이 끝날 때 그 문장을 AI로 한 번 더 검사해요.",
+            )
+        }
 
         SectionCard {
             Text(
@@ -116,6 +158,8 @@ private fun StepCard(
     description: String,
     buttonLabel: String,
     enabled: Boolean = true,
+    doneText: String? = null,
+    footer: String? = null,
     onClick: () -> Unit,
 ) {
     SectionCard {
@@ -125,7 +169,7 @@ private fun StepCard(
             Column(Modifier.weight(1f)) {
                 Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 Text(
-                    if (done) "완료됨" else description,
+                    if (done) doneText ?: "완료됨" else description,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -135,5 +179,6 @@ private fun StepCard(
             Spacer(Modifier.height(10.dp))
             Button(onClick = onClick, enabled = enabled, modifier = Modifier.fillMaxWidth()) { Text(buttonLabel) }
         }
+        footer?.let { Text(it, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 6.dp)) }
     }
 }

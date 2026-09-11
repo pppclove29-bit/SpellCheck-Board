@@ -30,7 +30,6 @@ import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.typeright.keyboard.TypeRightServices
 import com.typeright.keyboard.account.AccountState
-import com.typeright.keyboard.api.AiStatus
 import com.typeright.keyboard.api.ApiResult
 import com.typeright.keyboard.check.AiCallPolicy
 import com.typeright.keyboard.check.AiDecision
@@ -67,7 +66,8 @@ import kotlinx.coroutines.withContext
  * TypeRight IME. Compose UI inside an InputMethodService: the service is its own Lifecycle/ViewModelStore/
  * SavedStateRegistry owner and installs them on the window decor view (otherwise ComposeView crashes on show).
  *
- * Everything runs on the main thread except network calls (GrammarApiClient → IO dispatcher).
+ * Everything runs on the main thread except network calls (GrammarApiClient → IO dispatcher). The IME never signs
+ * in itself (that needs an Activity); it only reads the session shared with the host app.
  */
 class TypeRightIME :
     InputMethodService(),
@@ -89,6 +89,9 @@ class TypeRightIME :
     private val ui = ImeUiState()
     private var settings = TypeRightSettings()
     private var account = AccountState()
+
+    /** Signed in with Google (or dev auth). Signed out → on-device checks only + "로그인하면 AI 훈수" chip. */
+    private var signedIn = false
     private var ruleEngine: RuleEngine? = null
 
     private val hangul = HangulComposer()
@@ -114,7 +117,6 @@ class TypeRightIME :
     private var feedbackSeq = 0L
     private var lastSirenAt = 0L
     private var shortcutMatch: Shortcut? = null
-    private var showRecharge = false
     private var punctCycleIndex = -1
     private var layoutBeforeSymbols = LayoutId.DUBEOLSIK
 
@@ -131,6 +133,16 @@ class TypeRightIME :
         lifecycleScope.launch {
             services.account.account.collect {
                 account = it
+                refreshBar()
+            }
+        }
+        lifecycleScope.launch {
+            services.auth.authState.collect { state ->
+                signedIn = state.isSignedIn
+                if (!signedIn) {
+                    remoteJob?.cancel()
+                    lastAiText = null
+                }
                 refreshBar()
             }
         }
@@ -173,7 +185,8 @@ class TypeRightIME :
         ui.feedback = null
         setLayout(initialLayout(info))
         resetCheckState()
-        if (!ui.secure && settings.aiEnabled) {
+        if (!ui.secure && signedIn) {
+            // Cache /v1/me (PRO + quota) on keyboard start; not an AI call, no text is sent.
             lifecycleScope.launch { services.account.refreshIfStale() }
         }
         refreshBar()
@@ -233,7 +246,7 @@ class TypeRightIME :
             finishComposing()
             setLayout(koreanLayoutId())
         }
-        if (!new.aiEnabled) remoteJob?.cancel()
+        if (!new.aiActive) remoteJob?.cancel()
         if (old.feedbackMode != new.feedbackMode) lastFeedbackKey = null
         refreshBar()
     }
@@ -454,7 +467,6 @@ class TypeRightIME :
         lastAiText = null
         lastFeedbackKey = null
         shortcutMatch = null
-        showRecharge = false
         policeGate.reset()
     }
 
@@ -472,9 +484,8 @@ class TypeRightIME :
         // Snapshot = the sentence without trailing whitespace + its absolute start (contract "stale guard"), so typing
         // after it (a space, the next sentence) keeps results valid.
         val snap = CheckSnapshot(span.text.trimEnd(), win.cursorAbs - win.text.length + span.start)
-        if (snapshot?.absStart != snap.absStart) showRecharge = false
         policeGate.enterSentence(snap.absStart)
-        shortcutMatch = ShortcutRules.match(win.text, settings.shortcuts)
+        shortcutMatch = ShortcutRules.match(win.text, settings.allShortcuts)
 
         val remote = remoteResult
         if (remote != null && remote.first == snap) {
@@ -498,18 +509,19 @@ class TypeRightIME :
     ) {
         snapshot = snap
         corrections = list
-        if (alert && !ui.secure) {
-            val unresolved = policeGate.unresolved(snap, list)
-            val first = unresolved.firstOrNull()
+        val police = settings.feedbackMode == FeedbackMode.POLICE
+        val policeSilenced = police && policeGate.isSentenceIgnored(snap.absStart)
+        if (alert && !ui.secure && !policeSilenced) {
+            val first = list.firstOrNull()
             val key = first?.let { SpanKey.of(snap, it) }
             if (first == null) {
                 lastFeedbackKey = null
             } else if (key != lastFeedbackKey || feedbackOverride != null) {
                 lastFeedbackKey = key
-                val text = feedbackOverride ?: ruleEngine?.feedback(unresolved, settings.feedbackMode)
+                val text = feedbackOverride ?: ruleEngine?.feedback(list, settings.feedbackMode)
                 if (!text.isNullOrBlank()) showFeedback(FeedbackUi.styleFor(settings.feedbackMode), text)
             }
-            if (settings.feedbackMode == FeedbackMode.POLICE && policeGate.takeNewlyDetected(snap, list).isNotEmpty()) {
+            if (police && policeGate.takeNewlyDetected(snap, list).isNotEmpty()) {
                 siren() // every police user gets the haptic warning; PRO additionally gets blocking
             }
         }
@@ -521,20 +533,15 @@ class TypeRightIME :
         val decision = AiCallPolicy.decide(
             secure = ui.secure,
             aiEnabled = settings.aiEnabled,
+            aiConsented = settings.aiConsented,
+            signedIn = signedIn,
             networkAvailable = isNetworkAvailable(),
             account = account,
             text = text,
             lastAiText = lastAiText,
         )
-        when (decision) {
-            AiDecision.SKIP -> return
-            AiDecision.QUOTA_EXHAUSTED -> {
-                showRecharge = true
-                refreshBar()
-                return
-            }
-            AiDecision.CALL -> Unit
-        }
+        // QUOTA_EXHAUSTED: nothing extra — the ⚡충전 button is already emphasized (remaining == 0).
+        if (decision != AiDecision.CALL) return
         lastAiText = text
         val requestSnapshot = CheckSnapshot(text, snap.absStart)
         val mode = settings.feedbackMode
@@ -548,16 +555,14 @@ class TypeRightIME :
                         offline = false
                         val r = result.value
                         r.quota?.let { q -> launch { services.account.updateQuota(q) } }
-                        if (r.aiStatus == AiStatus.QUOTA_EXCEEDED) showRecharge = true
                         if (!ui.secure && isFresh(requestSnapshot)) {
                             remoteResult = requestSnapshot to r.suggestions
                             showCorrections(requestSnapshot, r.suggestions, feedbackOverride = r.witFeedback)
                         }
                     }
                     is ApiResult.Failure -> {
-                        // Silent fallback: on-device chips stay, status shows offline.
-                        offline = result.kind == ApiResult.Failure.Kind.NETWORK ||
-                            result.kind == ApiResult.Failure.Kind.UNAUTHENTICATED
+                        // Silent fallback: on-device chips stay. UNAUTHENTICATED → signed-out state arrives via authState.
+                        offline = result.kind == ApiResult.Failure.Kind.NETWORK
                         lastAiText = null
                     }
                 }
@@ -574,15 +579,14 @@ class TypeRightIME :
         return StaleGuard.isFresh(snap, win.text, win.cursorAbs)
     }
 
-    /** 맞춤법 경찰 (PRO): block space/enter/`. ! ?` while non-ignored errors remain in the current sentence. */
+    /** 맞춤법 경찰 (PRO): block space/enter/`. ! ?` while un-applied errors remain and the sentence isn't 무시'd. */
     private fun policeBlocks(): Boolean {
         if (ui.secure || settings.feedbackMode != FeedbackMode.POLICE || !account.isPro) return false
         debouncer.flushWith(Unit) // fresh result for the text as it is now
         val snap = snapshot ?: return false
         if (!policeGate.shouldBlock(settings.feedbackMode, account.isPro, ui.secure, snap, corrections)) return false
         siren()
-        val unresolved = policeGate.unresolved(snap, corrections)
-        val message = ruleEngine?.feedback(unresolved, FeedbackMode.POLICE) ?: POLICE_FALLBACK
+        val message = ruleEngine?.feedback(corrections, FeedbackMode.POLICE) ?: POLICE_FALLBACK
         showFeedback(FeedbackStyle.POLICE, message)
         return true
     }
@@ -596,22 +600,25 @@ class TypeRightIME :
         val police = settings.feedbackMode == FeedbackMode.POLICE
         val chips = buildList {
             shortcutMatch?.let { add(ChipUi.ShortcutChip(it)) }
-            if (snap != null) {
-                for (c in policeGate.unresolved(snap, corrections)) {
-                    add(ChipUi.CorrectionChip(c, snap))
-                    if (police) add(ChipUi.IgnoreChip(c, snap))
-                }
+            if (snap != null && corrections.isNotEmpty()) {
+                corrections.forEach { add(ChipUi.CorrectionChip(it, snap)) }
+                if (police && !policeGate.isSentenceIgnored(snap.absStart)) add(ChipUi.IgnoreChip(snap))
             }
-            if (showRecharge) add(ChipUi.RechargeChip)
+            if (!signedIn) add(ChipUi.LoginChip)
         }
         val status = when {
-            !settings.aiEnabled -> BarStatus.AI_OFF
+            !settings.aiActive -> BarStatus.AI_OFF
             remoteChecking -> BarStatus.CHECKING
             offline -> BarStatus.OFFLINE
-            !account.hasAiQuota -> BarStatus.QUOTA_EMPTY
             else -> BarStatus.NONE
         }
-        ui.bar = BarState(chips, status, account.isPro)
+        ui.bar = BarState(
+            chips = chips,
+            status = status,
+            isPro = account.isPro,
+            showRecharge = signedIn && !account.isPro,
+            rechargeEmphasized = account.quota?.remaining == 0,
+        )
     }
 
     private fun showFeedback(style: FeedbackStyle, text: String) {
@@ -624,12 +631,13 @@ class TypeRightIME :
         when (chip) {
             is ChipUi.CorrectionChip -> applyCorrection(chip)
             is ChipUi.IgnoreChip -> {
-                policeGate.ignore(SpanKey.of(chip.snapshot, chip.correction))
+                // 무시: police off for the whole current sentence (no blocking, no siren); chips stay.
+                policeGate.ignoreSentence(chip.snapshot.absStart)
                 if (ui.feedback?.style == FeedbackStyle.POLICE) ui.feedback = null
                 refreshBar()
             }
             is ChipUi.ShortcutChip -> applyShortcut(chip.shortcut)
-            ChipUi.RechargeChip -> openReward()
+            ChipUi.LoginChip -> openHostApp(TypeRightServices.LOGIN_DEEP_LINK)
         }
     }
 
@@ -640,6 +648,9 @@ class TypeRightIME :
             showFeedback(FeedbackStyle.REASON, "${c.originalWord} → ${c.suggestedWord} · $reason")
         }
     }
+
+    /** ⚡충전 → host app's RewardAdActivity (translucent, own task) via `typeright://reward`. No ads in the IME. */
+    override fun onRechargeClick() = openHostApp(TypeRightServices.REWARD_DEEP_LINK)
 
     override fun onFeedbackDismiss(id: Long) {
         if (ui.feedback?.id == id) ui.feedback = null
@@ -695,12 +706,11 @@ class TypeRightIME :
         onTyped()
     }
 
-    private fun openReward() {
-        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(TypeRightServices.REWARD_DEEP_LINK))
+    private fun openHostApp(deepLink: String) {
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(deepLink))
             .setPackage(packageName)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         runCatching { startActivity(intent) }
-        requestHideSelf(0)
     }
 
     override fun onSwitchToPreviousKeyboard() {

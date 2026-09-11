@@ -43,6 +43,9 @@ class SupabaseJwtVerifier:
         subject = payload.get("sub")
         if not subject:
             raise HttpError(401, "UNAUTHORIZED", "Token has no subject")
+        # Google sign-in only: anonymous accounts could be minted endlessly to farm the free daily quota.
+        if payload.get("is_anonymous"):
+            raise HttpError(401, "UNAUTHORIZED", "Sign in with Google is required")
         return subject
 
 

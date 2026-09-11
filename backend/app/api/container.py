@@ -8,6 +8,7 @@ from fastapi import Request
 from openai import AsyncOpenAI
 
 from app.config import Settings
+from app.services.account import AccountDeleter, InMemoryAccountDeleter, SupabaseAccountDeleter
 from app.services.admob_ssv import CachedAdmobKeyFetcher, KeyFetcher
 from app.services.auth import AuthVerifier, InsecureDevAuth, SupabaseJwtVerifier
 from app.services.grammar_service import GrammarService
@@ -22,6 +23,7 @@ log = logging.getLogger("typeright")
 class Container:
     grammar_service: GrammarService
     quota_store: QuotaStore
+    account_deleter: AccountDeleter
     auth: AuthVerifier
     fetch_admob_keys: KeyFetcher
     max_text_length: int
@@ -31,10 +33,13 @@ def build_container(settings: Settings) -> Container:
     http = httpx.AsyncClient(timeout=5.0)
 
     quota_store: QuotaStore
+    account_deleter: AccountDeleter
     if settings.supabase_url and settings.supabase_service_role_key:
         quota_store = SupabaseQuotaStore(http, settings.supabase_url, settings.supabase_service_role_key, settings.quota)
+        account_deleter = SupabaseAccountDeleter(http, settings.supabase_url, settings.supabase_service_role_key)
     elif settings.insecure_dev_auth:
-        quota_store = InMemoryQuotaStore(settings.quota)
+        in_memory = InMemoryQuotaStore(settings.quota)
+        quota_store, account_deleter = in_memory, InMemoryAccountDeleter(in_memory)
     else:
         raise RuntimeError("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required (or ALLOW_INSECURE_DEV_AUTH=true for local dev)")
 
@@ -53,7 +58,14 @@ def build_container(settings: Settings) -> Container:
         quota_store,
         on_ai_error=lambda err: log.warning("AI check degraded to rule engine: %s", err),
     )
-    return Container(grammar_service, quota_store, auth, CachedAdmobKeyFetcher(http), settings.max_text_length)
+    return Container(
+        grammar_service=grammar_service,
+        quota_store=quota_store,
+        account_deleter=account_deleter,
+        auth=auth,
+        fetch_admob_keys=CachedAdmobKeyFetcher(http),
+        max_text_length=settings.max_text_length,
+    )
 
 
 def get_container(request: Request) -> Container:

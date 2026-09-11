@@ -106,13 +106,38 @@ fun SuggestionBar(bar: BarState, secure: Boolean, actions: ImeActions) {
                         text = "⚡ ${chip.shortcut.key} → ${chip.shortcut.expansion}",
                         onClick = { actions.onChipClick(chip) },
                     )
-                    ChipUi.RechargeChip -> Chip(
-                        text = "🎬 광고 보고 AI 훈수 3회 충전",
-                        onClick = { actions.onChipClick(chip) },
-                    )
+                    ChipUi.LoginChip -> Chip(text = "🔑 로그인하면 AI 훈수", onClick = { actions.onChipClick(chip) })
                 }
             }
         }
+        if (bar.showRecharge) {
+            Spacer(Modifier.width(6.dp))
+            RechargeButton(emphasized = bar.rechargeEmphasized, onClick = actions::onRechargeClick)
+        }
+    }
+}
+
+/** ⚡충전: fixed at the right end for signed-in non-PRO users; emphasized when today's AI quota is used up. */
+@Composable
+private fun RechargeButton(emphasized: Boolean, onClick: () -> Unit) {
+    val colors = LocalKeyboardColors.current
+    val shape = RoundedCornerShape(16.dp)
+    Box(
+        Modifier
+            .clip(shape)
+            .background(if (emphasized) colors.danger else colors.chip)
+            .border(1.dp, if (emphasized) colors.danger else colors.accent, shape)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            "⚡충전",
+            color = if (emphasized) Color.White else colors.accent,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+        )
     }
 }
 
@@ -122,7 +147,7 @@ private fun StatusIndicator(status: BarStatus) {
     val colors = LocalKeyboardColors.current
     val dot = when (status) {
         BarStatus.CHECKING -> colors.accent
-        BarStatus.OFFLINE, BarStatus.QUOTA_EMPTY -> colors.danger
+        BarStatus.OFFLINE -> colors.danger
         else -> colors.hintText
     }
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(end = 6.dp)) {

@@ -45,6 +45,7 @@ class MainActivity : ComponentActivity() {
 
     private fun handleIntent(intent: Intent?) {
         val data = intent?.data ?: return
-        if (data.scheme == "typeright" && data.host == "reward") requestedTab.value = AppTab.REWARD
+        // typeright://login (keyboard "로그인하면 AI 훈수" chip) → onboarding with the Google login step.
+        if (data.scheme == "typeright" && data.host == "login") requestedTab.value = AppTab.ONBOARDING
     }
 }

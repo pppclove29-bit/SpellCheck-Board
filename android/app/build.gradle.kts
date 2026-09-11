@@ -3,6 +3,11 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
+fun stringProp(name: String, default: String): String =
+    (project.findProperty(name) as String?)?.takeIf { it.isNotBlank() } ?: default
+
+fun String.asBuildConfigString(): String = "\"" + replace("\\", "\\\\").replace("\"", "\\\"") + "\""
+
 android {
     namespace = "com.typeright.app"
     compileSdk = 36
@@ -13,6 +18,11 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "0.1.0"
+        // OAuth "Web application" client id used as serverClientId for Google Sign-In (may be empty in debug).
+        buildConfigField(
+            "String", "GOOGLE_WEB_CLIENT_ID",
+            stringProp("typeright.googleWebClientId", "").asBuildConfigString(),
+        )
     }
 
     buildTypes {
@@ -24,6 +34,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     compileOptions {
@@ -40,6 +51,11 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.kotlinx.coroutines.android)
+
+    // Google Sign-In via Credential Manager (host app only; the IME never signs in).
+    implementation(libs.androidx.credentials)
+    implementation(libs.androidx.credentials.play.services.auth)
+    implementation(libs.googleid)
 
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)

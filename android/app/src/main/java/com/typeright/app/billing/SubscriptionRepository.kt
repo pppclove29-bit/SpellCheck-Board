@@ -2,6 +2,12 @@ package com.typeright.app.billing
 
 import android.app.Activity
 
+/** Play Billing product IDs (subscriptions). */
+object SubscriptionProducts {
+    const val PRO_MONTHLY = "typeright_pro_monthly" // 월 2,900원
+    const val PRO_YEARLY = "typeright_pro_yearly" // 연 19,900원
+}
+
 data class SubscriptionPlan(val id: String, val title: String, val priceLabel: String, val detail: String)
 
 sealed interface PurchaseResult {
@@ -24,8 +30,8 @@ interface SubscriptionRepository {
 
 class StubSubscriptionRepository : SubscriptionRepository {
     override val plans = listOf(
-        SubscriptionPlan("typeright_pro_monthly", "월간 PRO", "월 2,900원", "매월 자동 갱신"),
-        SubscriptionPlan("typeright_pro_yearly", "연간 PRO", "연 19,900원", "월 1,658원꼴 · 약 43% 할인"),
+        SubscriptionPlan(SubscriptionProducts.PRO_MONTHLY, "월간 PRO", "월 2,900원", "매월 자동 갱신"),
+        SubscriptionPlan(SubscriptionProducts.PRO_YEARLY, "연간 PRO", "연 19,900원", "월 1,658원꼴 · 약 43% 할인"),
     )
     override val isAvailable: Boolean = false
 

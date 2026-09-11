@@ -7,27 +7,29 @@ enum class AiDecision {
     /** Call `/v1/grammar-check`. */
     CALL,
 
-    /** Skip: secure field, AI toggle off, offline, empty or unchanged text. */
+    /** Skip: secure field, AI off / no consent, signed out, offline, empty or unchanged text. */
     SKIP,
 
-    /** Skip because the free quota is used up → show the "광고 보고 AI 훈수 3회 충전" chip. */
+    /** Skip because the free quota is used up (the ⚡충전 button is emphasized). */
     QUOTA_EXHAUSTED,
 }
 
 object AiCallPolicy {
     /**
-     * AI only at sentence end when: not secure, AI toggle on, network ok, (is_pro || remaining > 0) and the text
-     * differs from the previous AI request.
+     * AI only at sentence end when: not secure, AI toggle on AND consent recorded, signed in (or dev auth),
+     * network ok, (is_pro || remaining > 0) and the text differs from the previous AI request.
      */
     fun decide(
         secure: Boolean,
         aiEnabled: Boolean,
+        aiConsented: Boolean,
+        signedIn: Boolean,
         networkAvailable: Boolean,
         account: AccountState,
         text: String,
         lastAiText: String?,
     ): AiDecision = when {
-        secure || !aiEnabled || !networkAvailable -> AiDecision.SKIP
+        secure || !aiEnabled || !aiConsented || !signedIn || !networkAvailable -> AiDecision.SKIP
         text.isBlank() || text == lastAiText -> AiDecision.SKIP
         !account.hasAiQuota -> AiDecision.QUOTA_EXHAUSTED
         else -> AiDecision.CALL

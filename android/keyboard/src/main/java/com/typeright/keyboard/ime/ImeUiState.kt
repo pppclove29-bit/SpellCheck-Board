@@ -18,19 +18,18 @@ enum class BarStatus(val label: String) {
     CHECKING("AI 검사 중"),
     OFFLINE("오프라인"),
     AI_OFF("AI 꺼짐"),
-    QUOTA_EMPTY("AI 훈수 소진"),
     SECURE("보안 키패드"),
 }
 
 sealed interface ChipUi {
     data class CorrectionChip(val correction: Correction, val snapshot: CheckSnapshot) : ChipUi
 
-    /** 맞춤법 경찰 '무시': ignore this span for the current sentence. */
-    data class IgnoreChip(val correction: Correction, val snapshot: CheckSnapshot) : ChipUi
+    /** 맞춤법 경찰 '무시': police mode off for the whole current sentence. */
+    data class IgnoreChip(val snapshot: CheckSnapshot) : ChipUi
     data class ShortcutChip(val shortcut: Shortcut) : ChipUi
 
-    /** "광고 보고 AI 훈수 3회 충전" → host app `typeright://reward`. */
-    data object RechargeChip : ChipUi
+    /** Signed out: "로그인하면 AI 훈수" → host app. */
+    data object LoginChip : ChipUi
 }
 
 @Immutable
@@ -38,6 +37,10 @@ data class BarState(
     val chips: List<ChipUi> = emptyList(),
     val status: BarStatus = BarStatus.NONE,
     val isPro: Boolean = false,
+    /** ⚡충전, fixed at the right end for signed-in non-PRO users. */
+    val showRecharge: Boolean = false,
+    /** Emphasized when today's remaining AI quota is 0. */
+    val rechargeEmphasized: Boolean = false,
 )
 
 enum class FeedbackStyle { BUBBLE, POLICE, TIP, REASON }
@@ -73,6 +76,7 @@ interface ImeActions {
     fun onKeyLongPress(spec: KeySpec)
     fun onChipClick(chip: ChipUi)
     fun onChipLongPress(chip: ChipUi)
+    fun onRechargeClick()
     fun onFeedbackDismiss(id: Long)
     fun onSwitchToPreviousKeyboard()
 }

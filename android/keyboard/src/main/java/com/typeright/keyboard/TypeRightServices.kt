@@ -2,6 +2,7 @@ package com.typeright.keyboard
 
 import android.content.Context
 import com.typeright.keyboard.account.AccountRepository
+import com.typeright.keyboard.api.ApiResult
 import com.typeright.keyboard.api.GrammarApiClient
 import com.typeright.keyboard.api.UrlConnectionTransport
 import com.typeright.keyboard.auth.AuthSessionManager
@@ -26,6 +27,13 @@ class TypeRightServices private constructor(context: Context) {
         anonKey = BuildConfig.SUPABASE_ANON_KEY,
         store = DataStoreSessionStore(app.typeRightDataStore),
         transport = UrlConnectionTransport(),
+        // Every sign-out path (manual, repeated 401, revoked refresh token) wipes per-user local data, so the next
+        // account signing in on this device never syncs the previous user's shortcuts. PRO shortcuts are restored
+        // from the server on the next sign-in; free users have only the built-ins.
+        onSignedOut = {
+            account.clear()
+            settings.clearUserData()
+        },
     )
 
     val api: GrammarApiClient = GrammarApiClient(BuildConfig.API_BASE_URL, auth)
@@ -49,9 +57,23 @@ class TypeRightServices private constructor(context: Context) {
         RuleEngine(RulesParser.parse(json))
     }
 
+    /** Sign out: clears the session, the cached account and local user data (via onSignedOut). */
+    suspend fun signOut() = auth.signOut()
+
+    /**
+     * Account deletion: `DELETE /v1/me` (204) → sign out, which clears the session, the cached account and local
+     * user data. An active Play subscription is NOT cancelled by this (the UI says so).
+     */
+    suspend fun deleteAccount(): ApiResult<Unit> {
+        val result = api.deleteMe()
+        if (result is ApiResult.Success) auth.signOut()
+        return result
+    }
+
     companion object {
         const val RULES_ASSET = "korean-rules.json"
         const val REWARD_DEEP_LINK = "typeright://reward"
+        const val LOGIN_DEEP_LINK = "typeright://login"
 
         @Volatile
         private var instance: TypeRightServices? = null

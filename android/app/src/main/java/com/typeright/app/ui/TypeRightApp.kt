@@ -18,13 +18,13 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.typeright.keyboard.TypeRightServices
 import com.typeright.keyboard.account.AccountState
+import com.typeright.keyboard.auth.AuthState
 import com.typeright.keyboard.settings.TypeRightSettings
 
 enum class AppTab(val label: String, val icon: String) {
     ONBOARDING("시작하기", "⌨️"),
     SHORTCUTS("단축어", "⚡"),
     SETTINGS("설정", "⚙️"),
-    REWARD("AI 충전", "🎬"),
     PRO("PRO", "👑"),
 }
 
@@ -35,6 +35,7 @@ fun TypeRightApp(requestedTab: AppTab?, onRequestedTabConsumed: () -> Unit, focu
     var tab by rememberSaveable { mutableStateOf(AppTab.ONBOARDING) }
     val settings by services.settings.settings.collectAsStateWithLifecycle(initialValue = TypeRightSettings())
     val account by services.account.account.collectAsStateWithLifecycle(initialValue = AccountState())
+    val authState by services.auth.authState.collectAsStateWithLifecycle(initialValue = AuthState.SignedOut)
 
     LaunchedEffect(requestedTab) {
         if (requestedTab != null) {
@@ -43,10 +44,12 @@ fun TypeRightApp(requestedTab: AppTab?, onRequestedTabConsumed: () -> Unit, focu
         }
     }
 
-    // Host-app open: cache /v1/me (PRO + quota), then sync PRO shortcuts with Supabase.
-    LaunchedEffect(Unit) {
-        services.account.refresh()
-        services.shortcutSync.sync(services.account.current().isPro)
+    // Host-app open / sign-in: cache /v1/me (PRO + quota), then sync PRO custom shortcuts with Supabase.
+    LaunchedEffect(authState.isSignedIn) {
+        if (authState.isSignedIn) {
+            services.account.refresh()
+            services.shortcutSync.sync(services.account.current().isPro)
+        }
     }
 
     Scaffold(
@@ -65,10 +68,9 @@ fun TypeRightApp(requestedTab: AppTab?, onRequestedTabConsumed: () -> Unit, focu
     ) { padding ->
         Box(Modifier.padding(padding)) {
             when (tab) {
-                AppTab.ONBOARDING -> OnboardingScreen(focusTick = focusTick)
+                AppTab.ONBOARDING -> OnboardingScreen(services, settings, authState, focusTick)
                 AppTab.SHORTCUTS -> ShortcutsScreen(services, settings, account, onOpenPro = { tab = AppTab.PRO })
-                AppTab.SETTINGS -> SettingsScreen(services, settings, account)
-                AppTab.REWARD -> RewardScreen(services, account)
+                AppTab.SETTINGS -> SettingsScreen(services, settings, account, authState)
                 AppTab.PRO -> SubscriptionScreen(services, account)
             }
         }

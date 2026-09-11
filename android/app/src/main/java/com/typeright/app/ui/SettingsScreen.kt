@@ -1,33 +1,61 @@
 package com.typeright.app.ui
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RadioButton
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.typeright.app.auth.rememberGoogleSignIn
 import com.typeright.keyboard.TypeRightServices
 import com.typeright.keyboard.account.AccountState
+import com.typeright.keyboard.api.ApiResult
+import com.typeright.keyboard.auth.AuthState
 import com.typeright.keyboard.rules.FeedbackMode
 import com.typeright.keyboard.settings.KoreanLayout
 import com.typeright.keyboard.settings.TypeRightSettings
 import kotlinx.coroutines.launch
 
+const val DELETE_ACCOUNT_TEXT =
+    "계정을 삭제하면 서버에 저장된 계정 정보(AI 훈수 사용 기록·충전 내역·동기화된 단축어)가 삭제되고 되돌릴 수 없어요.\n\n" +
+        "이용 중인 Play 스토어 정기 결제(PRO)는 계정을 삭제해도 자동으로 해지되지 않아요. " +
+        "Play 스토어 > 결제 및 정기 결제에서 따로 해지해 주세요."
+
 @Composable
-fun SettingsScreen(services: TypeRightServices, settings: TypeRightSettings, account: AccountState) {
+fun SettingsScreen(
+    services: TypeRightServices,
+    settings: TypeRightSettings,
+    account: AccountState,
+    authState: AuthState,
+) {
     val scope = rememberCoroutineScope()
+    val signIn = rememberGoogleSignIn(services)
+    var confirmDelete by remember { mutableStateOf(false) }
+    var accountMessage by remember { mutableStateOf<String?>(null) }
+
     Column(
         Modifier
             .fillMaxSize()
@@ -36,24 +64,52 @@ fun SettingsScreen(services: TypeRightServices, settings: TypeRightSettings, acc
     ) {
         ScreenTitle("설정", "키보드와 앱이 같은 설정을 공유해요. 바꾸면 키보드에 바로 반영돼요.")
 
-        AccountSummaryCard(account, services.isDevAuth, onRefresh = { scope.launch { services.account.refresh() } })
-
         SectionCard {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("AI 훈수 사용", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                    Text(
-                        "문장이 끝나면(. ! ? 줄바꿈) 그 문장만 AI로 한 번 더 검사해요. 끄면 기기 안 규칙 검사만 해요.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Switch(
-                    checked = settings.aiEnabled,
-                    onCheckedChange = { scope.launch { services.settings.setAiEnabled(it) } },
+            Text("계정", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(4.dp))
+            when (authState) {
+                is AuthState.Dev -> Text(
+                    "개발 모드 · X-Dev-User-Id: ${authState.userId}",
+                    style = MaterialTheme.typography.bodySmall,
                 )
+                is AuthState.SignedIn -> {
+                    Text("Google 계정: ${authState.email ?: authState.userId}", style = MaterialTheme.typography.bodyMedium)
+                    Spacer(Modifier.height(8.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(onClick = {
+                            scope.launch {
+                                services.signOut()
+                                accountMessage = "로그아웃했어요."
+                            }
+                        }) { Text("로그아웃") }
+                        TextButton(
+                            onClick = { confirmDelete = true },
+                            colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                        ) { Text("계정 삭제") }
+                    }
+                }
+                AuthState.SignedOut -> {
+                    Text(
+                        "로그인하지 않았어요. 기기 안 맞춤법 검사는 로그인 없이도 돼요.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Button(onClick = signIn::signIn, enabled = !signIn.busy) {
+                        Text(if (signIn.busy) "로그인 중…" else "Google로 로그인")
+                    }
+                }
+            }
+            (signIn.message ?: accountMessage)?.let {
+                Text(it, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 6.dp))
             }
         }
+
+        if (authState.isSignedIn) {
+            AccountSummaryCard(account, services.isDevAuth, onRefresh = { scope.launch { services.account.refresh() } })
+            if (!account.isPro) RechargeButton(account)
+        }
+
+        SectionCard { AiToggleRow(services, settings) }
 
         SectionCard {
             Text("피드백 모드", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
@@ -84,6 +140,29 @@ fun SettingsScreen(services: TypeRightServices, settings: TypeRightSettings, acc
                 )
             }
         }
+    }
+
+    if (confirmDelete) {
+        AlertDialog(
+            onDismissRequest = { confirmDelete = false },
+            title = { Text("계정을 삭제할까요?") },
+            text = { Text(DELETE_ACCOUNT_TEXT) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        confirmDelete = false
+                        scope.launch {
+                            accountMessage = when (val r = services.deleteAccount()) {
+                                is ApiResult.Success -> "계정을 삭제했어요."
+                                is ApiResult.Failure -> "계정을 삭제하지 못했어요. 네트워크를 확인하고 다시 시도해 주세요. (${r.httpCode ?: r.kind})"
+                            }
+                        }
+                    },
+                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                ) { Text("삭제") }
+            },
+            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("취소") } },
+        )
     }
 }
 

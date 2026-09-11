@@ -15,12 +15,19 @@ class CheonjiinComposerTest {
     )
     private val strokes = mapOf('ㅣ' to CheonjiinStroke.I, 'ㆍ' to CheonjiinStroke.DOT, 'ㅡ' to CheonjiinStroke.EU)
 
-    /** Key taps: consonant keys by their first consonant, strokes ㅣㆍㅡ, '|' breaks consonant cycling. */
+    /** Virtual clock: all taps happen at the same instant unless '~' (301 ms) or '=' (300 ms) advances it. */
+    private var clock = 0L
+
+    private fun composer() = CheonjiinComposer(nowMillis = { clock })
+
+    /** Key taps: consonant keys by their first consonant, strokes ㅣㆍㅡ, '|' breaks cycling, '~'/'=' advance time. */
     private fun CheonjiinComposer.type(seq: String): String {
         val out = StringBuilder()
         for (ch in seq) {
             when (ch) {
                 '|' -> breakCycle()
+                '~' -> clock += 301
+                '=' -> clock += 300
                 in keys -> out.append(inputConsonant(keys.getValue(ch)).commit)
                 in strokes -> out.append(inputStroke(strokes.getValue(ch)).commit)
                 else -> error("unknown key $ch")
@@ -29,7 +36,10 @@ class CheonjiinComposerTest {
         return out.toString() + composingText
     }
 
-    private fun typed(seq: String) = CheonjiinComposer().type(seq)
+    private fun typed(seq: String): String {
+        clock = 0L
+        return composer().type(seq)
+    }
 
     private fun assertAll(cases: Map<String, String>) =
         cases.forEach { (input, expected) -> assertEquals(input, expected, typed(input)) }
@@ -87,7 +97,7 @@ class CheonjiinComposerTest {
 
     @Test
     fun pendingDotIsShownAndBackspacedFirst() {
-        val c = CheonjiinComposer()
+        val c = composer()
         assertEquals("ㄱㆍ", c.type("ㄱㆍ"))
         assertEquals("ㄱ", c.backspace()!!.composing)
         assertEquals("ㄱㆍㆍ", c.type("ㆍㆍ"))
@@ -100,16 +110,36 @@ class CheonjiinComposerTest {
 
     @Test
     fun backspaceRemovesWholeBuiltVowel() {
-        val c = CheonjiinComposer()
+        val c = composer()
         assertEquals("과", c.type("ㄱㆍㅡㅣㆍ"))
         assertEquals("ㄱ", c.backspace()!!.composing)
     }
 
     @Test
     fun finishDropsPendingDot() {
-        val c = CheonjiinComposer()
+        val c = composer()
         c.type("ㄱㅣㆍㆍ")
         c.inputStroke(CheonjiinStroke.DOT) // (ㅑ, ㆍ) has no combination → pending ㆍ
         assertEquals(ComposeResult("갸", ""), c.finish())
+    }
+
+    @Test
+    fun cyclingOnlyWithin300ms() = assertAll(
+        mapOf(
+            "ㄱ~ㄱ" to "ㄱㄱ", // pause → new consonant
+            "ㄱ=ㄱ" to "ㅋ", // exactly 300 ms → still cycles
+            "ㄱ=ㄱ=ㄱ" to "ㄲ", // the window is measured from the previous tap
+            "ㄴㄴ~ㄴ" to "ㄹㄴ",
+            "ㄱㅣㆍㄱ~ㄱ" to "각ㄱ",
+            "ㄱㅣㆍㄱ~ㄱㅣ" to "각기",
+        ),
+    )
+
+    @Test
+    fun defaultClockIsUsableWithoutInjection() {
+        val c = CheonjiinComposer()
+        c.inputConsonant(CheonjiinConsonantKey.GIYEOK)
+        assertEquals(CheonjiinComposer.CYCLE_WINDOW_MS, 300L)
+        assertEquals(true, c.isComposing)
     }
 }

@@ -12,32 +12,32 @@ data class SpanKey(val absOffset: Int, val word: String) {
 
 /**
  * 맞춤법 경찰 state for the current sentence (pure logic, unit-tested):
- * - '무시' adds a span to the ignore list of the current sentence (false-positive escape hatch, always offered).
- * - [shouldBlock]: PRO + police mode + not secure + any non-ignored error → space/enter/`. ! ?` are blocked.
- * - [takeNewlyDetected]: errors not alerted before (so the siren haptic fires once per new error, not per re-check).
- * Both lists reset when the sentence start moves (a new sentence) or on [reset].
+ * - '무시' turns police mode OFF for the whole current sentence: no blocking, no siren. Correction chips still show.
+ *   The key is the sentence's absolute start; it resets when a new sentence starts or the start moves.
+ * - [shouldBlock]: police mode + PRO + not secure + sentence not ignored + ≥1 un-applied correction
+ *   → space/enter/`. ! ?` are swallowed.
+ * - [takeNewlyDetected]: errors not alerted before (the siren fires once per new error, not per re-check).
  */
 class PoliceGate {
     private var sentenceStart = Int.MIN_VALUE
-    private val ignored = HashSet<SpanKey>()
+    private var ignoredSentenceStart: Int? = null
     private val alerted = HashSet<SpanKey>()
 
     fun enterSentence(absStart: Int) {
         if (absStart != sentenceStart) {
             sentenceStart = absStart
-            ignored.clear()
+            ignoredSentenceStart = null
             alerted.clear()
         }
     }
 
-    fun ignore(key: SpanKey) {
-        ignored += key
+    /** '무시': police off for the sentence starting at [absStart]. */
+    fun ignoreSentence(absStart: Int) {
+        enterSentence(absStart)
+        ignoredSentenceStart = absStart
     }
 
-    fun isIgnored(key: SpanKey): Boolean = key in ignored
-
-    fun unresolved(snapshot: CheckSnapshot, corrections: List<Correction>): List<Correction> =
-        corrections.filterNot { isIgnored(SpanKey.of(snapshot, it)) }
+    fun isSentenceIgnored(absStart: Int): Boolean = ignoredSentenceStart == absStart
 
     fun shouldBlock(
         mode: FeedbackMode,
@@ -47,16 +47,18 @@ class PoliceGate {
         corrections: List<Correction>,
     ): Boolean {
         if (mode != FeedbackMode.POLICE || !isPro || secure || snapshot == null) return false
-        return unresolved(snapshot, corrections).isNotEmpty()
+        return !isSentenceIgnored(snapshot.absStart) && corrections.isNotEmpty()
     }
 
-    /** Returns the corrections that were not alerted yet and marks them alerted. */
-    fun takeNewlyDetected(snapshot: CheckSnapshot, corrections: List<Correction>): List<Correction> =
-        unresolved(snapshot, corrections).filter { alerted.add(SpanKey.of(snapshot, it)) }
+    /** Returns the corrections that were not alerted yet and marks them alerted (none while the sentence is ignored). */
+    fun takeNewlyDetected(snapshot: CheckSnapshot, corrections: List<Correction>): List<Correction> {
+        if (isSentenceIgnored(snapshot.absStart)) return emptyList()
+        return corrections.filter { alerted.add(SpanKey.of(snapshot, it)) }
+    }
 
     fun reset() {
         sentenceStart = Int.MIN_VALUE
-        ignored.clear()
+        ignoredSentenceStart = null
         alerted.clear()
     }
 }

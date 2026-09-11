@@ -53,7 +53,7 @@ curl -s localhost:8790/v1/grammar-check -H 'content-type: application/json' -H '
 
 ## Supabase 설정
 
-1. 프로젝트 생성 → Authentication → **Anonymous sign-ins 활성화**
+1. 프로젝트 생성 → Authentication → Providers → **Google 활성화** (Google Cloud의 Web client ID/secret 입력, Android는 같은 Web client ID를 `GOOGLE_WEB_CLIENT_ID`로 사용). Anonymous sign-ins는 끈다 (서버도 익명 토큰을 거부)
 2. `backend/supabase/migrations/*.sql` 적용 (`supabase db push` 또는 SQL Editor에서 순서대로 실행)
 3. 백엔드 env: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` (서버 전용 — 클라이언트에 절대 포함 금지). 레거시 HS256 프로젝트만 `SUPABASE_JWT_SECRET`
 4. Android BuildConfig: `SUPABASE_URL`, `SUPABASE_ANON_KEY`
@@ -84,11 +84,11 @@ curl -s localhost:8790/v1/grammar-check -H 'content-type: application/json' -H '
 ## 진행 상태
 
 - [x] API 계약서, 공통 규칙 파일(사전 130개 + 패턴 11개, 매운맛 전용 멘트 48개), 골든 테스트(교정 29 · 피드백 6 · 유형 4)
-- [x] 백엔드: 규칙 엔진, PII 마스킹, OpenAI 구조화 출력 연동, 쿼터/광고 보상/PRO, Supabase JWT 인증, AdMob SSV — pytest 103개 통과 (OpenAI는 HTTP 모킹으로 검증)
+- [x] 백엔드: 규칙 엔진, PII 마스킹, OpenAI 구조화 출력 연동, 쿼터/광고 보상/PRO, Supabase JWT 인증, AdMob SSV — pytest 109개 통과 (OpenAI는 HTTP 모킹으로 검증)
 - [x] Supabase 마이그레이션: Postgres 18(PGlite)에서 적용 + 쿼터 상한·광고 멱등/일일 상한·PRO 만료·클라이언트 RPC 차단·단축어 RLS 검증 (실제 Supabase 프로젝트 적용은 미확인)
 - [ ] 백엔드: 실제 OpenAI 키로 응답 품질 확인, Vercel 실배포 확인
 - [ ] 인앱 결제 영수증 검증(Google Play Developer API) → `entitlements` 갱신 (3주차)
 - [ ] AdMob SDK 연동 (호스트 앱 보상형 광고 화면, 3주차)
-- [x] Android 키보드·호스트 앱 — 단위 테스트 107개 통과, 디버그 APK 빌드 (`cd android && ./gradlew :keyboard:testDebugUnitTest :app:assembleDebug`)
+- [x] Android 키보드·호스트 앱 (구글 로그인, 충전 팝업, AI 동의, 계정 삭제 포함) — 단위 테스트 122개 통과, 디버그 APK 빌드 (`cd android && ./gradlew :keyboard:testDebugUnitTest :app:assembleDebug`)
 - [ ] Android 실기기/에뮬레이터 동작 확인
 - [ ] iOS — 보류

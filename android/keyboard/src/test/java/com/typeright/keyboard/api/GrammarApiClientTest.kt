@@ -32,7 +32,11 @@ private class FakeAuth(
     private val refreshed: Map<String, String>? = null,
 ) : AuthHeaderProvider {
     var unauthorizedCalls = 0
+    var rejectedCalls = 0
     override suspend fun authHeaders() = headers
+    override suspend fun onAuthRejected() {
+        rejectedCalls++
+    }
     override suspend fun authHeadersAfterUnauthorized(): Map<String, String>? {
         unauthorizedCalls++
         return refreshed
@@ -158,5 +162,39 @@ class GrammarApiClientTest {
         val r = client.grammarCheck("가".repeat(1001), FeedbackMode.SPICY_WIT)
         assertEquals(ApiResult.Failure.Kind.INVALID_REQUEST, (r as ApiResult.Failure).kind)
         assertTrue(transport.requests.isEmpty())
+    }
+
+    @Test
+    fun still401AfterRefreshSignsOut() = runTest {
+        val unauthorized = HttpResponse(401, """{"error":{"code":"UNAUTHORIZED","message":"x"}}""")
+        val transport = FakeTransport(unauthorized, unauthorized)
+        val auth = FakeAuth(mapOf("Authorization" to "Bearer old"), mapOf("Authorization" to "Bearer new"))
+        val client = GrammarApiClient("http://h", auth, transport, UnconfinedTestDispatcher(testScheduler))
+        val r = client.grammarCheck(text, FeedbackMode.SPICY_WIT) as ApiResult.Failure
+        assertEquals(ApiResult.Failure.Kind.UNAUTHENTICATED, r.kind)
+        assertEquals(2, transport.requests.size)
+        assertEquals(1, auth.rejectedCalls)
+    }
+
+    @Test
+    fun failedRefreshDoesNotSignOutAgain() = runTest {
+        val transport = FakeTransport(HttpResponse(401, ""))
+        val auth = FakeAuth(mapOf("Authorization" to "Bearer old"), refreshed = null)
+        val client = GrammarApiClient("http://h", auth, transport, UnconfinedTestDispatcher(testScheduler))
+        assertEquals(ApiResult.Failure.Kind.UNAUTHENTICATED, (client.me() as ApiResult.Failure).kind)
+        assertEquals(1, auth.unauthorizedCalls)
+        assertEquals(0, auth.rejectedCalls)
+    }
+
+    @Test
+    fun deleteMeIsADeleteWithBearerAndAccepts204() = runTest {
+        val transport = FakeTransport(HttpResponse(204, ""))
+        val client = GrammarApiClient("http://h", FakeAuth(mapOf("Authorization" to "Bearer tok")), transport, UnconfinedTestDispatcher(testScheduler))
+        assertTrue(client.deleteMe() is ApiResult.Success)
+        val req = transport.requests.single()
+        assertEquals("DELETE", req.method)
+        assertEquals("http://h/v1/me", req.url)
+        assertEquals("Bearer tok", req.headers["Authorization"])
+        assertEquals(null, req.body)
     }
 }

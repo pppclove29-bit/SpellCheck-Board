@@ -51,6 +51,12 @@ class InMemoryQuotaStore:
     def set_pro(self, user_id: str, is_pro: bool) -> None:
         (self._pro.add if is_pro else self._pro.discard)(user_id)
 
+    def forget(self, user_id: str) -> None:
+        """Drops all state for a deleted account (mirrors ON DELETE CASCADE)."""
+        self._usage = {k: v for k, v in self._usage.items() if k[0] != user_id}
+        self._rewards = {t: r for t, r in self._rewards.items() if r[0] != user_id}
+        self._pro.discard(user_id)
+
     async def get_status(self, user_id: str) -> QuotaStatus:
         u = self._today(user_id)
         return _status(user_id in self._pro, self._policy, u["used"], u["bonus"])

@@ -12,7 +12,18 @@ import org.junit.Test
 import java.time.Instant
 
 class ShortcutRulesTest {
-    private val shortcuts = listOf(Shortcut("ㅈㅅ", "죄송합니다"), Shortcut("ㄱㅅ", "감사합니다"))
+    private val custom = listOf(Shortcut("ㅂㅂ", "바이바이"), Shortcut("ㅎㅇ", "안녕하세요"))
+
+    @Test
+    fun builtInsAreTheThreeDefaults() {
+        assertEquals(
+            listOf(Shortcut("ㅈㅅ", "죄송합니다"), Shortcut("ㄱㅅ", "감사합니다"), Shortcut("ㅇㅋ", "알겠습니다")),
+            ShortcutRules.BUILT_IN,
+        )
+        val settings = TypeRightSettings(shortcuts = custom)
+        assertEquals(ShortcutRules.BUILT_IN + custom, settings.allShortcuts)
+        assertEquals(ShortcutRules.BUILT_IN, TypeRightSettings().allShortcuts)
+    }
 
     @Test
     fun lastTokenBeforeCursor() {
@@ -24,27 +35,30 @@ class ShortcutRulesTest {
     }
 
     @Test
-    fun matchesOnlyWholeLastToken() {
-        assertEquals("죄송합니다", ShortcutRules.match("늦어서 ㅈㅅ", shortcuts)?.expansion)
-        assertNull(ShortcutRules.match("늦어서ㅈㅅ", shortcuts))
-        assertNull(ShortcutRules.match("ㅈㅅ ", shortcuts))
+    fun matchesBuiltInsAndCustomsOnWholeLastToken() {
+        val all = TypeRightSettings(shortcuts = custom).allShortcuts
+        assertEquals("죄송합니다", ShortcutRules.match("늦어서 ㅈㅅ", all)?.expansion)
+        assertEquals("바이바이", ShortcutRules.match("그럼 ㅂㅂ", all)?.expansion)
+        assertNull(ShortcutRules.match("늦어서ㅈㅅ", all))
+        assertNull(ShortcutRules.match("ㅈㅅ ", all))
     }
 
     @Test
     fun validation() {
-        assertNull(ShortcutRules.validate("ㅂㅂ", "바이바이", shortcuts))
-        assertNotNull(ShortcutRules.validate("", "x", shortcuts))
-        assertNotNull(ShortcutRules.validate("a b", "x", shortcuts))
-        assertNotNull(ShortcutRules.validate("ㅈㅅ", "x", shortcuts)) // duplicate
-        assertNull(ShortcutRules.validate("ㅈㅅ", "죄송해요", shortcuts, editingKey = "ㅈㅅ"))
-        assertNotNull(ShortcutRules.validate("k".repeat(21), "x", shortcuts))
-        assertNotNull(ShortcutRules.validate("k", "x".repeat(501), shortcuts))
-        assertNotNull(ShortcutRules.validate("k", " ", shortcuts))
+        assertNull(ShortcutRules.validate("ㅋㅋ", "ㅋㅋㅋ 웃겨", custom))
+        assertNotNull(ShortcutRules.validate("", "x", custom))
+        assertNotNull(ShortcutRules.validate("a b", "x", custom))
+        assertNotNull(ShortcutRules.validate("ㅂㅂ", "x", custom)) // duplicate
+        assertNull(ShortcutRules.validate("ㅂㅂ", "잘 가", custom, editingKey = "ㅂㅂ"))
+        assertNotNull(ShortcutRules.validate("ㅈㅅ", "x", custom)) // built-ins are read-only
+        assertNotNull(ShortcutRules.validate("k".repeat(21), "x", custom))
+        assertNotNull(ShortcutRules.validate("k", "x".repeat(501), custom))
+        assertNotNull(ShortcutRules.validate("k", " ", custom))
     }
 
     @Test
     fun codecRoundTrip() {
-        assertEquals(shortcuts, ShortcutCodec.decode(ShortcutCodec.encode(shortcuts)))
+        assertEquals(custom, ShortcutCodec.decode(ShortcutCodec.encode(custom)))
         assertNull(ShortcutCodec.decode(null))
         assertNull(ShortcutCodec.decode("not json"))
         assertEquals(emptyList<Shortcut>(), ShortcutCodec.decode("[]"))

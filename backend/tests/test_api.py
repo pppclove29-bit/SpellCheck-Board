@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 
 from app.api.container import Container
 from app.main import create_app
+from app.services.account import InMemoryAccountDeleter
 from app.services.admob_ssv import AdmobKey
 from app.services.auth import AuthVerifier, InsecureDevAuth, SupabaseJwtVerifier
 from app.services.grammar_service import GrammarService
@@ -27,6 +28,7 @@ def make_client(auth: AuthVerifier | None = None) -> tuple[TestClient, InMemoryQ
     container = Container(
         grammar_service=GrammarService(RuleEngine(), None, quota),
         quota_store=quota,
+        account_deleter=InMemoryAccountDeleter(quota),
         auth=auth or InsecureDevAuth(),
         fetch_admob_keys=fake_keys,
         max_text_length=20,
@@ -105,7 +107,21 @@ def test_me_returns_plan_and_quota() -> None:
     }
 
 
-SSV_QUERY = "ad_network=5450213213286189855&ad_unit=1234567890&reward_amount=1&reward_item=AI&timestamp=1757570000000&transaction_id=txn-1&user_id=u1"
+def test_delete_me_removes_account_state() -> None:
+    client, _ = make_client()
+    client.get(signed_ssv_url(SSV_QUERY))  # u1 earns a bonus
+    assert client.get("/v1/me", headers=DEV).json()["quota"]["bonus"] == 3
+    res = client.delete("/v1/me", headers=DEV)
+    assert (res.status_code, res.content) == (204, b"")
+    assert client.get("/v1/me", headers=DEV).json()["quota"]["bonus"] == 0
+
+
+def test_delete_me_requires_auth() -> None:
+    client, _ = make_client(SupabaseJwtVerifier("https://p.supabase.co", jwt_secret="x" * 32))
+    assert client.delete("/v1/me").status_code == 401
+
+
+SSV_QUERY ="ad_network=5450213213286189855&ad_unit=1234567890&reward_amount=1&reward_item=AI&timestamp=1757570000000&transaction_id=txn-1&user_id=u1"
 
 
 def test_ssv_credits_a_signed_reward_once() -> None:
