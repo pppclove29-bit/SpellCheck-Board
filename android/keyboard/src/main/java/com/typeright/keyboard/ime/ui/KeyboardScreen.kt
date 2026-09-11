@@ -33,7 +33,11 @@ fun KeyboardScreen(state: ImeUiState, actions: ImeActions) {
                     actions = actions,
                 )
                 // Feedback (speech bubble / police banner / tip card) is overlaid inside the reserved slot: no layout jump.
-                FeedbackOverlay(feedback = state.feedback, onDismiss = actions::onFeedbackDismiss)
+                FeedbackOverlay(
+                    feedback = state.feedback,
+                    onDismiss = actions::onFeedbackDismiss,
+                    onShare = actions::onShareFeedback,
+                )
             }
             KeyboardView(
                 layoutId = state.layout,

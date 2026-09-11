@@ -22,7 +22,15 @@ data class TypeRightSettings(
     val shortcuts: List<Shortcut> = emptyList(),
     val koreanLayout: KoreanLayout = KoreanLayout.DUBEOLSIK,
     val lastLanguage: KeyboardLanguage = KeyboardLanguage.KOREAN,
+    /** 앱별 자동 모드: built-in app → mode map (KakaoTalk = spicy, Slack/mail = gentle, …). */
+    val appAutoMode: Boolean = true,
+    /** Modes the user picked for specific apps via the keyboard's mode chip (package name → mode). */
+    val appModeOverrides: Map<String, FeedbackMode> = emptyMap(),
 ) {
+    /** Feedback mode for the app being typed in ([packageName] from EditorInfo / the PROCESS_TEXT caller). */
+    fun modeFor(packageName: String?): FeedbackMode =
+        FeedbackModeResolver.resolve(packageName, appModeOverrides, appAutoMode, feedbackMode)
+
     val aiConsented: Boolean get() = aiConsentAtMillis != null
 
     /** AI network calls are allowed only when the toggle is on AND consent was recorded. */

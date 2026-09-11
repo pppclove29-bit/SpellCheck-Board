@@ -17,6 +17,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -35,6 +36,7 @@ import com.typeright.keyboard.account.AccountState
 import com.typeright.keyboard.api.ApiResult
 import com.typeright.keyboard.auth.AuthState
 import com.typeright.keyboard.rules.FeedbackMode
+import com.typeright.keyboard.settings.FeedbackModeResolver
 import com.typeright.keyboard.settings.KoreanLayout
 import com.typeright.keyboard.settings.TypeRightSettings
 import kotlinx.coroutines.launch
@@ -110,7 +112,12 @@ fun SettingsScreen(
         SectionCard { AiToggleRow(services, settings, authState, signIn) }
 
         SectionCard {
-            Text("피드백 모드", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text("기본 피드백 모드", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text(
+                "앱별 자동 모드·앱별 지정이 없는 앱에 적용돼요.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
             FeedbackMode.entries.forEach { mode ->
                 val note = when {
                     mode != FeedbackMode.POLICE -> ""
@@ -131,6 +138,39 @@ fun SettingsScreen(
                         }
                     },
                 )
+            }
+        }
+
+        SectionCard {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("앱별 자동 모드", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        "카톡·SNS는 매운맛, 슬랙·메일은 상냥한 선생님으로 자동 전환해요. 키보드의 모드 칩(🌶️/🍎/🚨)을 누르면 앱마다 따로 정할 수 있어요.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(
+                    checked = settings.appAutoMode,
+                    onCheckedChange = { on -> scope.launch { services.settings.setAppAutoMode(on) } },
+                )
+            }
+            if (settings.appModeOverrides.isNotEmpty()) {
+                Spacer(Modifier.height(10.dp))
+                Text("앱별로 직접 정한 모드", style = MaterialTheme.typography.labelLarge)
+                settings.appModeOverrides.entries
+                    .sortedBy { FeedbackModeResolver.appLabel(it.key) }
+                    .forEach { (pkg, mode) ->
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            Text(FeedbackModeResolver.appLabel(pkg), modifier = Modifier.weight(1f))
+                            Text("${FeedbackModeResolver.emoji(mode)} ${mode.label}", style = MaterialTheme.typography.bodySmall)
+                            TextButton(onClick = { scope.launch { services.settings.setAppModeOverride(pkg, null) } }) {
+                                Text("초기화")
+                            }
+                        }
+                    }
+                TextButton(onClick = { scope.launch { services.settings.clearAppModeOverrides() } }) { Text("모두 초기화") }
             }
         }
 

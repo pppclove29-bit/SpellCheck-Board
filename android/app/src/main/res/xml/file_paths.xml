@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- FileProvider: share-card PNGs are written to cache/share/ and shared via content:// URIs. -->
+<paths>
+    <cache-path name="share" path="share/" />
+</paths>

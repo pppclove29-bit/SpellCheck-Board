@@ -1,4 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">TypeRight</string>
+    <!-- Text-selection menu entry (ACTION_PROCESS_TEXT), next to 복사/잘라내기.
+         "맛춤뻡" is an intentional misspelling (brand hook, confirmed by the planner) — do NOT "fix" it. -->
+
+    <string name="process_text_label">맛춤뻡 검사</string>
 </resources>

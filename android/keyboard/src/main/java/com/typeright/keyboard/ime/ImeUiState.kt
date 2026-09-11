@@ -42,13 +42,22 @@ data class BarState(
     val showRecharge: Boolean = false,
     /** Emphasized when today's remaining AI quota is 0. */
     val rechargeEmphasized: Boolean = false,
+    /** Feedback mode of the app being typed in (앱별 모드), shown as the mode chip. */
+    val mode: FeedbackMode = FeedbackMode.DEFAULT,
+    val showModeChip: Boolean = false,
 )
 
 /** NOTICE: server notices such as the AI-paused `ai_notice`. */
 enum class FeedbackStyle { BUBBLE, POLICE, TIP, REASON, NOTICE }
 
 @Immutable
-data class FeedbackUi(val id: Long, val style: FeedbackStyle, val text: String) {
+data class FeedbackUi(
+    val id: Long,
+    val style: FeedbackStyle,
+    val text: String,
+    /** Feedback about a correction (not a notice/reason): offers "📸 짤 생성". */
+    val shareable: Boolean = false,
+) {
     companion object {
         fun styleFor(mode: FeedbackMode): FeedbackStyle = when (mode) {
             FeedbackMode.SPICY_WIT -> FeedbackStyle.BUBBLE
@@ -81,4 +90,10 @@ interface ImeActions {
     fun onRechargeClick()
     fun onFeedbackDismiss(id: Long)
     fun onSwitchToPreviousKeyboard()
+
+    /** Mode chip: cycle the feedback mode for the current app (🌶️ → 🍎 → 🚨). */
+    fun onModeChipClick() {}
+
+    /** 📸 on a feedback bubble: open the share-card screen for that feedback. */
+    fun onShareFeedback(id: Long) {}
 }

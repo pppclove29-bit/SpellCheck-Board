@@ -82,6 +82,9 @@ class TypeRightServices private constructor(context: Context) {
         const val REWARD_DEEP_LINK = "typeright://reward"
         const val LOGIN_DEEP_LINK = "typeright://login"
 
+        /** Host-app share-card screen, started by explicit class name (the keyboard module can't see app classes). */
+        const val SHARE_CARD_ACTIVITY = "com.typeright.app.share.ShareCardActivity"
+
         @Volatile
         private var instance: TypeRightServices? = null
 

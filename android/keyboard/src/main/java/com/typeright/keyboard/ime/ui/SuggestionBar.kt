@@ -51,6 +51,8 @@ import com.typeright.keyboard.ime.FeedbackStyle
 import com.typeright.keyboard.ime.FeedbackUi
 import com.typeright.keyboard.ime.ImeActions
 import com.typeright.keyboard.rules.CorrectionSource
+import com.typeright.keyboard.rules.FeedbackMode
+import com.typeright.keyboard.settings.FeedbackModeResolver
 import kotlinx.coroutines.delay
 
 @Composable
@@ -78,6 +80,10 @@ fun SuggestionBar(bar: BarState, secure: Boolean, actions: ImeActions) {
         }
 
         StatusIndicator(bar.status)
+        if (bar.showModeChip) {
+            ModeChip(bar.mode, onClick = actions::onModeChipClick)
+            Spacer(Modifier.width(6.dp))
+        }
         Row(
             Modifier
                 .weight(1f)
@@ -138,6 +144,23 @@ private fun RechargeButton(emphasized: Boolean, onClick: () -> Unit) {
             fontWeight = FontWeight.Bold,
             maxLines = 1,
         )
+    }
+}
+
+/** 앱별 모드 chip (🌶️/🍎/🚨): tap cycles the mode for the app being typed in. */
+@Composable
+private fun ModeChip(mode: FeedbackMode, onClick: () -> Unit) {
+    val colors = LocalKeyboardColors.current
+    Box(
+        Modifier
+            .size(30.dp)
+            .clip(CircleShape)
+            .background(colors.chip)
+            .border(1.dp, colors.chipBorder, CircleShape)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(FeedbackModeResolver.emoji(mode), fontSize = 15.sp)
     }
 }
 
@@ -211,7 +234,7 @@ private val BubbleShape = GenericShape { size, _ ->
  * spicy_wit → speech bubble (pop animation), police → red banner, gentle → tip card, long-press → reason.
  */
 @Composable
-fun FeedbackOverlay(feedback: FeedbackUi?, onDismiss: (Long) -> Unit) {
+fun FeedbackOverlay(feedback: FeedbackUi?, onDismiss: (Long) -> Unit, onShare: (Long) -> Unit = {}) {
     var shown by remember { mutableStateOf<FeedbackUi?>(null) }
     if (feedback != null) shown = feedback
 
@@ -260,16 +283,30 @@ fun FeedbackOverlay(feedback: FeedbackUi?, onDismiss: (Long) -> Unit) {
                 .padding(start = 12.dp, end = 12.dp, top = 3.dp, bottom = if (f.style == FeedbackStyle.BUBBLE) 8.dp else 3.dp),
             contentAlignment = Alignment.CenterStart,
         ) {
-            Text(
-                prefix + f.text,
-                color = fg,
-                fontSize = 12.5.sp,
-                lineHeight = 15.sp,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                fontWeight = if (f.style == FeedbackStyle.POLICE) FontWeight.Bold else FontWeight.Medium,
-                modifier = Modifier.fillMaxWidth(),
-            )
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    prefix + f.text,
+                    color = fg,
+                    fontSize = 12.5.sp,
+                    lineHeight = 15.sp,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    fontWeight = if (f.style == FeedbackStyle.POLICE) FontWeight.Bold else FontWeight.Medium,
+                    modifier = Modifier.weight(1f),
+                )
+                if (f.shareable) {
+                    // 📸 짤 생성: turns this 훈수 into a shareable image card (host app).
+                    Text(
+                        "📸",
+                        fontSize = 16.sp,
+                        modifier = Modifier
+                            .padding(start = 8.dp)
+                            .clip(CircleShape)
+                            .clickable { onShare(f.id) }
+                            .padding(4.dp),
+                    )
+                }
+            }
         }
     }
 }

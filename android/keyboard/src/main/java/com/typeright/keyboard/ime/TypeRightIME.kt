@@ -58,6 +58,8 @@ import com.typeright.keyboard.settings.KoreanLayout
 import com.typeright.keyboard.settings.Shortcut
 import com.typeright.keyboard.settings.ShortcutRules
 import com.typeright.keyboard.settings.TypeRightSettings
+import com.typeright.keyboard.settings.FeedbackModeResolver
+import com.typeright.keyboard.share.ShareCardRequest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -94,6 +96,10 @@ class TypeRightIME :
     /** Signed in with Google (or dev auth). Signed out → on-device checks only + "로그인하면 AI 훈수" chip. */
     private var signedIn = false
     private var ruleEngine: RuleEngine? = null
+
+    /** App being typed in (EditorInfo.packageName) → its feedback mode (앱별 모드: override > built-in > global). */
+    private var currentPackage: String? = null
+    private val currentMode: FeedbackMode get() = settings.modeFor(currentPackage)
 
     private val hangul = HangulComposer()
     private val cheonjiin = CheonjiinComposer()
@@ -182,6 +188,8 @@ class TypeRightIME :
         // Re-evaluated on every field: secure → no capture, no checks, no network, no police blocking.
         ui.secure = SecureFieldDetector.isSecure(info)
         ui.enterLabel = enterLabel(info)
+        currentPackage = info.packageName
+        lastFeedbackKey = null
         ui.shift = ShiftState.OFF
         ui.feedback = null
         setLayout(initialLayout(info))
@@ -248,7 +256,7 @@ class TypeRightIME :
             setLayout(koreanLayoutId())
         }
         if (!new.aiActive) remoteJob?.cancel()
-        if (old.feedbackMode != new.feedbackMode) lastFeedbackKey = null
+        if (old.modeFor(currentPackage) != new.modeFor(currentPackage)) lastFeedbackKey = null
         refreshBar()
     }
 
@@ -510,7 +518,7 @@ class TypeRightIME :
     ) {
         snapshot = snap
         corrections = list
-        val police = settings.feedbackMode == FeedbackMode.POLICE
+        val police = currentMode == FeedbackMode.POLICE
         val policeSilenced = police && policeGate.isSentenceIgnored(snap.absStart)
         if (alert && !ui.secure && !policeSilenced) {
             val first = list.firstOrNull()
@@ -519,8 +527,8 @@ class TypeRightIME :
                 lastFeedbackKey = null
             } else if (key != lastFeedbackKey || feedbackOverride != null) {
                 lastFeedbackKey = key
-                val text = feedbackOverride ?: ruleEngine?.feedback(list, settings.feedbackMode)
-                if (!text.isNullOrBlank()) showFeedback(FeedbackUi.styleFor(settings.feedbackMode), text)
+                val text = feedbackOverride ?: ruleEngine?.feedback(list, currentMode)
+                if (!text.isNullOrBlank()) showFeedback(FeedbackUi.styleFor(currentMode), text, shareable = true)
             }
             if (police && policeGate.takeNewlyDetected(snap, list).isNotEmpty()) {
                 siren() // every police user gets the haptic warning; PRO additionally gets blocking
@@ -545,7 +553,7 @@ class TypeRightIME :
         if (decision != AiDecision.CALL) return
         lastAiText = text
         val requestSnapshot = CheckSnapshot(text, snap.absStart)
-        val mode = settings.feedbackMode
+        val mode = currentMode
         remoteJob?.cancel()
         remoteJob = lifecycleScope.launch {
             remoteChecking = true
@@ -588,10 +596,10 @@ class TypeRightIME :
 
     /** 맞춤법 경찰 (PRO): block space/enter/`. ! ?` while un-applied errors remain and the sentence isn't 무시'd. */
     private fun policeBlocks(): Boolean {
-        if (ui.secure || settings.feedbackMode != FeedbackMode.POLICE || !account.isPro) return false
+        if (ui.secure || currentMode != FeedbackMode.POLICE || !account.isPro) return false
         debouncer.flushWith(Unit) // fresh result for the text as it is now
         val snap = snapshot ?: return false
-        if (!policeGate.shouldBlock(settings.feedbackMode, account.isPro, ui.secure, snap, corrections)) return false
+        if (!policeGate.shouldBlock(currentMode, account.isPro, ui.secure, snap, corrections)) return false
         siren()
         val message = ruleEngine?.feedback(corrections, FeedbackMode.POLICE) ?: POLICE_FALLBACK
         showFeedback(FeedbackStyle.POLICE, message)
@@ -604,7 +612,7 @@ class TypeRightIME :
             return
         }
         val snap = snapshot
-        val police = settings.feedbackMode == FeedbackMode.POLICE
+        val police = currentMode == FeedbackMode.POLICE
         val chips = buildList {
             shortcutMatch?.let { add(ChipUi.ShortcutChip(it)) }
             if (snap != null && corrections.isNotEmpty()) {
@@ -626,11 +634,13 @@ class TypeRightIME :
             isPro = account.isPro,
             showRecharge = signedIn && !account.isPro,
             rechargeEmphasized = account.quota?.remaining == 0,
+            mode = currentMode,
+            showModeChip = true,
         )
     }
 
-    private fun showFeedback(style: FeedbackStyle, text: String) {
-        ui.feedback = FeedbackUi(++feedbackSeq, style, text)
+    private fun showFeedback(style: FeedbackStyle, text: String, shareable: Boolean = false) {
+        ui.feedback = FeedbackUi(++feedbackSeq, style, text, shareable)
     }
 
     // --- chips ----------------------------------------------------------------------------------
@@ -662,6 +672,32 @@ class TypeRightIME :
 
     override fun onFeedbackDismiss(id: Long) {
         if (ui.feedback?.id == id) ui.feedback = null
+    }
+
+    /** Mode chip: cycles this app's mode and saves it as a per-app override (police needs sign-in, so it's skipped). */
+    override fun onModeChipClick() {
+        if (ui.secure) return
+        val next = FeedbackModeResolver.next(currentMode, allowPolice = signedIn)
+        val pkg = currentPackage
+        lifecycleScope.launch {
+            if (pkg.isNullOrEmpty()) services.settings.setFeedbackMode(next) else services.settings.setAppModeOverride(pkg, next)
+        }
+        val policeHint = if (!signedIn) " · 경찰 모드는 로그인 후" else ""
+        showFeedback(FeedbackStyle.NOTICE, "${FeedbackModeResolver.emoji(next)} 이 앱에서는 ${next.label} 모드$policeHint")
+    }
+
+    /** 📸 → host app's ShareCardActivity with the checked sentence, its first correction and the 훈수 line. */
+    override fun onShareFeedback(id: Long) {
+        val f = ui.feedback?.takeIf { it.id == id && it.shareable } ?: return
+        val snap = snapshot ?: return
+        val c = corrections.firstOrNull() ?: return
+        if (ui.secure || c.end > snap.text.length) return
+        val request = ShareCardRequest(snap.text, c.offset, c.length, c.suggestedWord, f.text, currentMode)
+        val intent = android.content.Intent()
+            .setClassName(packageName, TypeRightServices.SHARE_CARD_ACTIVITY)
+            .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+        runCatching { startActivity(request.putInto(intent)) }
+        ui.feedback = null
     }
 
     private fun applyCorrection(chip: ChipUi.CorrectionChip) {

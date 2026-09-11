@@ -89,6 +89,7 @@ curl -s localhost:8790/v1/grammar-check -H 'content-type: application/json' -H '
 - [ ] 백엔드: 실제 OpenAI 키로 응답 품질 확인, Vercel 실배포 확인
 - [ ] 인앱 결제 영수증 검증(Google Play Developer API) → `entitlements` 갱신 (3주차)
 - [ ] AdMob SDK 연동 (호스트 앱 보상형 광고 화면, 3주차)
-- [x] Android 키보드·호스트 앱 (구글 로그인, 충전 팝업, AI 동의, 계정 삭제, 예산 중단·AI 대상 사전 판정 포함) — 단위 테스트 133개 통과, 디버그 APK 빌드 (`cd android && ./gradlew :keyboard:testDebugUnitTest :app:assembleDebug`)
+- [x] Android 키보드·호스트 앱 (구글 로그인, 충전 팝업, AI 동의, 계정 삭제, 예산 중단·AI 대상 사전 판정 포함) — 단위 테스트 145개 통과, 디버그 APK 빌드
+- [x] 성장 기능: 텍스트 선택 메뉴 [맛춤뻡 검사](키보드 교체 없이 검사), 📸 짤 생성 공유 카드, 앱별 자동 모드(카톡=매운맛 / 슬랙·메일=선생님) (`cd android && ./gradlew :keyboard:testDebugUnitTest :app:assembleDebug`)
 - [ ] Android 실기기/에뮬레이터 동작 확인
 - [ ] iOS — 보류

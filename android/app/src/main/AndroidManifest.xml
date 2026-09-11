@@ -1,6 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- Share card "갤러리 저장" on Android 8–9 only; API 29+ writes via MediaStore without a permission. -->
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" />
+
     <application
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
@@ -44,5 +49,40 @@
                 <data android:scheme="typeright" android:host="reward" />
             </intent-filter>
         </activity>
+
+        <!--
+            Text-selection menu "[맛춤뻡 검사]" in any app (복사/잘라내기 옆) — works with Samsung Keyboard/Gboard, no
+            keyboard switch needed. Started for result by the text view; returns the corrected text when editable.
+        -->
+        <activity
+            android:name=".check.ProcessTextActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:label="@string/process_text_label"
+            android:theme="@style/Theme.TypeRight.Translucent">
+            <intent-filter>
+                <action android:name="android.intent.action.PROCESS_TEXT" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
+
+        <!-- 📸 짤 생성 preview/save/share. Started by explicit class name from the keyboard and the checker. -->
+        <activity
+            android:name=".share.ShareCardActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:taskAffinity="com.typeright.app.share"
+            android:theme="@style/Theme.TypeRight.Translucent" />
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
     </application>
 </manifest>

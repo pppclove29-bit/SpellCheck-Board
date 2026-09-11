@@ -34,6 +34,8 @@ class SettingsRepository private constructor(private val dataStore: DataStore<Pr
                     ?: KoreanLayout.DUBEOLSIK,
                 lastLanguage = p[Keys.LAST_LANGUAGE]?.let { v -> KeyboardLanguage.entries.firstOrNull { it.name == v } }
                     ?: KeyboardLanguage.KOREAN,
+                appAutoMode = p[Keys.APP_AUTO_MODE] ?: true,
+                appModeOverrides = AppModeCodec.decode(p[Keys.APP_MODE_OVERRIDES]),
             )
         }
         .distinctUntilChanged()
@@ -63,6 +65,23 @@ class SettingsRepository private constructor(private val dataStore: DataStore<Pr
 
     suspend fun setFeedbackMode(mode: FeedbackMode) {
         dataStore.edit { it[Keys.FEEDBACK_MODE] = mode.apiValue }
+    }
+
+    suspend fun setAppAutoMode(enabled: Boolean) {
+        dataStore.edit { it[Keys.APP_AUTO_MODE] = enabled }
+    }
+
+    /** Sets the feedback mode for one app, or with null removes that app's override. */
+    suspend fun setAppModeOverride(packageName: String, mode: FeedbackMode?) {
+        dataStore.edit { p ->
+            val map = AppModeCodec.decode(p[Keys.APP_MODE_OVERRIDES]).toMutableMap()
+            if (mode == null) map.remove(packageName) else map[packageName] = mode
+            p[Keys.APP_MODE_OVERRIDES] = AppModeCodec.encode(map)
+        }
+    }
+
+    suspend fun clearAppModeOverrides() {
+        dataStore.edit { it.remove(Keys.APP_MODE_OVERRIDES) }
     }
 
     suspend fun setKoreanLayout(layout: KoreanLayout) {
@@ -149,6 +168,8 @@ class SettingsRepository private constructor(private val dataStore: DataStore<Pr
         val SHORTCUT_TOMBSTONES = stringPreferencesKey("shortcut_tombstones")
         val KOREAN_LAYOUT = stringPreferencesKey("korean_layout")
         val LAST_LANGUAGE = stringPreferencesKey("last_language")
+        val APP_AUTO_MODE = booleanPreferencesKey("app_auto_mode")
+        val APP_MODE_OVERRIDES = stringPreferencesKey("app_mode_overrides")
     }
 
     companion object {
