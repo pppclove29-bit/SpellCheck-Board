@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 FeedbackMode = Literal["spicy_wit", "police", "gentle"]
 SuggestionType = Literal["spelling", "spacing", "grammar", "word_choice"]
-AiStatus = Literal["used", "quota_exceeded", "unavailable"]
+AiStatus = Literal["used", "quota_exceeded", "unavailable", "paused", "skipped", "rate_limited"]
 
 
 class GrammarCheckRequest(BaseModel):
@@ -44,6 +44,8 @@ class GrammarCheckResponse(BaseModel):
     suggestions: list[Suggestion]
     engine: Literal["rule", "hybrid"]
     ai_status: AiStatus
+    # Shown to the user when AI is paused by the monthly budget guard; null otherwise.
+    ai_notice: str | None = None
     quota: QuotaStatus
 
 
@@ -51,6 +53,7 @@ class MeResponse(BaseModel):
     user_id: str
     is_pro: bool
     quota: QuotaStatus
+    ai_paused: bool = False
 
 
 class HealthResponse(BaseModel):

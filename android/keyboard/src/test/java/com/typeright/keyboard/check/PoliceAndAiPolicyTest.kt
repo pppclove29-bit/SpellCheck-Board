@@ -109,4 +109,45 @@ class AiCallPolicyTest {
         assertEquals(AiDecision.CALL, decide(account = empty.copy(isPro = true)))
         assertEquals(AiDecision.CALL, decide(account = AccountState())) // unknown quota: let the server decide
     }
+
+    @Test
+    fun aiPausedMeansOnDeviceOnlyEvenForPro() {
+        assertEquals(AiDecision.SKIP, decide(account = free.copy(aiPaused = true)))
+        assertEquals(AiDecision.SKIP, decide(account = AccountState(isPro = true, aiPaused = true)))
+    }
+
+    @Test
+    fun skipsTextsTheServerWouldNotSendToAi() {
+        assertEquals(AiDecision.SKIP, decide(text = "가".repeat(151))) // too long
+        assertEquals(AiDecision.SKIP, decide(text = "ㅋㅋㅋㅋ")) // jamo only
+        assertEquals(AiDecision.SKIP, decide(text = "ok 123")) // no Hangul syllables
+        assertEquals(AiDecision.SKIP, decide(text = "안!")) // one syllable
+        assertEquals(AiDecision.CALL, decide(text = "가".repeat(150)))
+        assertEquals(AiDecision.CALL, decide(text = "안녕"))
+    }
+
+    @Test
+    fun lengthCountsCodePointsLikeTheServer() {
+        // 75 emoji = 150 UTF-16 units but 75 code points (Python len) → still eligible with 2 syllables.
+        assertTrue(AiCallPolicy.isAiEligible("안녕" + "😀".repeat(75)))
+        assertFalse(AiCallPolicy.isAiEligible("안녕" + "😀".repeat(149)))
+    }
+}
+
+class AccountStateTest {
+    @Test
+    fun refreshIsDueEveryFiveMinutesNormally() {
+        val s = AccountState(fetchedAtMillis = 1_000_000L)
+        assertFalse(s.isRefreshDue(1_000_000L + AccountState.STALE_AFTER_MS - 1))
+        assertTrue(s.isRefreshDue(1_000_000L + AccountState.STALE_AFTER_MS))
+        assertTrue(AccountState().isRefreshDue(System.currentTimeMillis())) // never fetched (fetchedAt = 0)
+    }
+
+    @Test
+    fun whilePausedRecheckAtMostHourly() {
+        val s = AccountState(fetchedAtMillis = 1_000_000L, aiPaused = true)
+        assertFalse(s.isRefreshDue(1_000_000L + AccountState.STALE_AFTER_MS))
+        assertFalse(s.isRefreshDue(1_000_000L + AccountState.AI_PAUSED_RECHECK_MS - 1))
+        assertTrue(s.isRefreshDue(1_000_000L + AccountState.AI_PAUSED_RECHECK_MS))
+    }
 }

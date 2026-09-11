@@ -45,6 +45,14 @@ async def test_resets_on_new_kst_day() -> None:
     assert (status.used, status.bonus, status.remaining) == (0, 0, 5)
 
 
+async def test_attempt_cap_is_separate_from_quota() -> None:
+    store = InMemoryQuotaStore(QuotaPolicy(free_daily_attempts=2, pro_daily_attempts=3))
+    assert [await store.try_ai_attempt("u") for _ in range(3)] == [True, True, False]
+    store.set_pro("p", True)
+    assert [await store.try_ai_attempt("p") for _ in range(4)] == [True, True, True, False]
+    assert (await store.get_status("u")).used == 0
+
+
 async def test_pro_limit() -> None:
     store = InMemoryQuotaStore(policy)
     store.set_pro("p", True)

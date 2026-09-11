@@ -29,14 +29,16 @@ import androidx.compose.ui.unit.dp
 import com.typeright.keyboard.TypeRightServices
 import com.typeright.keyboard.account.AccountState
 import com.typeright.keyboard.settings.Shortcut
+import com.typeright.keyboard.settings.ShortcutAccess
 import com.typeright.keyboard.settings.ShortcutRules
 import com.typeright.keyboard.settings.ShortcutSyncRepository
 import com.typeright.keyboard.settings.TypeRightSettings
 import kotlinx.coroutines.launch
 
 /**
- * 단축어. The 3 built-ins (ㅈㅅ/ㄱㅅ/ㅇㅋ) work for everyone and are read-only. Adding/editing/deleting custom
- * shortcuts is PRO — free users get the paywall card when they tap "추가". PRO edits sync to Supabase right away.
+ * 단축어. The 3 built-ins (ㅈㅅ/ㄱㅅ/ㅇㅋ) work for everyone and are read-only. Custom shortcuts keep working in the
+ * keyboard even after PRO expires and can always be deleted; adding/editing needs PRO ([ShortcutAccess]):
+ * an expired user sees "PRO가 만료되어…", a user who never had custom shortcuts sees the normal paywall.
  */
 @Composable
 fun ShortcutsScreen(
@@ -49,22 +51,32 @@ fun ShortcutsScreen(
     var editing by remember { mutableStateOf<Shortcut?>(null) }
     var creating by remember { mutableStateOf(false) }
     var showPaywall by remember { mutableStateOf(false) }
+    var showExpired by remember { mutableStateOf(false) }
     var syncMessage by remember { mutableStateOf<String?>(null) }
 
     fun syncAfterEdit() {
         scope.launch {
-            syncMessage = when (services.shortcutSync.sync(account.isPro)) {
-                ShortcutSyncRepository.Result.SYNCED -> "☁️ 클라우드와 동기화했어요"
-                ShortcutSyncRepository.Result.FAILED -> "동기화 실패 — 기기에는 저장됐고 다음에 다시 시도해요"
-                ShortcutSyncRepository.Result.SKIPPED -> null
+            syncMessage = when (services.shortcutSync.sync(account.isPro).status) {
+                ShortcutSyncRepository.Outcome.Status.SYNCED -> "☁️ 클라우드와 동기화했어요"
+                ShortcutSyncRepository.Outcome.Status.FAILED -> "동기화 실패 — 기기에는 저장됐고 다음에 다시 시도해요"
+                ShortcutSyncRepository.Outcome.Status.SKIPPED -> null
             }
+        }
+    }
+
+    /** Add (target == null) or edit a custom shortcut, gated by [ShortcutAccess]. */
+    fun requestAddOrEdit(target: Shortcut?) {
+        when (ShortcutAccess.forAddOrEdit(account.isPro, hasCustomShortcuts = settings.shortcuts.isNotEmpty())) {
+            ShortcutAccess.ALLOWED -> if (target == null) creating = true else editing = target
+            ShortcutAccess.EXPIRED -> showExpired = true
+            ShortcutAccess.PAYWALL -> showPaywall = true
         }
     }
 
     Column(Modifier.fillMaxSize().padding(20.dp)) {
         ScreenTitle("단축어", "키보드에서 단축어를 입력하면 제안 칩이 떠요. 칩을 누르면 문구로 바뀌어요.")
         Button(
-            onClick = { if (account.isPro) creating = true else showPaywall = true },
+            onClick = { requestAddOrEdit(null) },
             modifier = Modifier.fillMaxWidth(),
         ) { Text(if (account.isPro) "+ 단축어 추가" else "+ 단축어 추가 (PRO)") }
         syncMessage?.let { Text(it, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 6.dp)) }
@@ -88,15 +100,14 @@ fun ShortcutsScreen(
             }
             items(settings.shortcuts, key = { "custom:${it.key}" }) { s ->
                 ShortcutRow(s, trailing = {
-                    if (account.isPro) {
-                        TextButton(onClick = { editing = s }) { Text("수정") }
-                        TextButton(onClick = {
-                            scope.launch {
-                                services.settings.deleteShortcut(s.key)
-                                syncAfterEdit()
-                            }
-                        }) { Text("삭제") }
-                    }
+                    TextButton(onClick = { requestAddOrEdit(s) }) { Text("수정") }
+                    // Deleting stays allowed for everyone (RLS allows owner delete).
+                    TextButton(onClick = {
+                        scope.launch {
+                            services.settings.deleteShortcut(s.key)
+                            syncAfterEdit()
+                        }
+                    }) { Text("삭제") }
                 })
             }
         }
@@ -119,6 +130,23 @@ fun ShortcutsScreen(
                 }) { Text("PRO 알아보기") }
             },
             dismissButton = { TextButton(onClick = { showPaywall = false }) { Text("닫기") } },
+        )
+    }
+
+    if (showExpired) {
+        AlertDialog(
+            onDismissRequest = { showExpired = false },
+            title = { Text("PRO가 만료되어 단축어를 추가할 수 없습니다") },
+            text = {
+                Text("지금 있는 단축어는 키보드에서 계속 쓸 수 있고 삭제도 할 수 있어요. 추가·수정하려면 PRO를 다시 구독해 주세요.")
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showExpired = false
+                    onOpenPro()
+                }) { Text("PRO 업그레이드") }
+            },
+            dismissButton = { TextButton(onClick = { showExpired = false }) { Text("닫기") } },
         )
     }
 

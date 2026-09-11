@@ -223,6 +223,7 @@ fun FeedbackOverlay(feedback: FeedbackUi?, onDismiss: (Long) -> Unit) {
                 FeedbackStyle.POLICE -> 3_500L
                 FeedbackStyle.TIP -> 7_000L
                 FeedbackStyle.REASON -> 4_000L
+                FeedbackStyle.NOTICE -> 5_000L
             },
         )
         onDismiss(f.id)
@@ -242,6 +243,7 @@ fun FeedbackOverlay(feedback: FeedbackUi?, onDismiss: (Long) -> Unit) {
             FeedbackStyle.POLICE -> Triple(colors.danger, Color.White, RoundedCornerShape(10.dp))
             FeedbackStyle.TIP -> Triple(colors.tip, colors.keyText, RoundedCornerShape(10.dp))
             FeedbackStyle.REASON -> Triple(colors.chip, colors.keyText, RoundedCornerShape(10.dp))
+            FeedbackStyle.NOTICE -> Triple(colors.bubble, colors.bubbleText, RoundedCornerShape(10.dp))
         }
         val prefix = when (f.style) {
             FeedbackStyle.TIP -> "💡 "

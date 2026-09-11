@@ -37,6 +37,10 @@ class QuotaStore(Protocol):
         """Idempotent per AdMob transaction id."""
         ...
 
+    async def try_ai_attempt(self, user_id: str) -> bool:
+        """Counts one AI call attempt for today; False once the daily attempt cap is reached."""
+        ...
+
 
 class InMemoryQuotaStore:
     """Local dev / tests. State lives in one process only — never use on Vercel."""
@@ -76,8 +80,16 @@ class InMemoryQuotaStore:
         self._today(user_id)["bonus"] += self._policy.ad_reward_amount
         return "credited"
 
+    async def try_ai_attempt(self, user_id: str) -> bool:
+        u = self._today(user_id)
+        limit = self._policy.pro_daily_attempts if user_id in self._pro else self._policy.free_daily_attempts
+        if u["attempts"] >= limit:
+            return False
+        u["attempts"] += 1
+        return True
+
     def _today(self, user_id: str) -> dict[str, int]:
-        return self._usage.setdefault((user_id, kst_date(self._now())), {"used": 0, "bonus": 0})
+        return self._usage.setdefault((user_id, kst_date(self._now())), {"used": 0, "bonus": 0, "attempts": 0})
 
 
 _UUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.IGNORECASE)
@@ -113,6 +125,14 @@ class SupabaseQuotaStore:
                 "p_amount": self._policy.ad_reward_amount,
                 "p_max_per_day": self._policy.max_ad_rewards_per_day,
             },
+        )
+
+    async def try_ai_attempt(self, user_id: str) -> bool:
+        return bool(
+            await self._rpc(
+                "try_ai_attempt",
+                {"p_user_id": user_id, "p_free_limit": self._policy.free_daily_attempts, "p_pro_limit": self._policy.pro_daily_attempts},
+            )
         )
 
     def _limit_args(self, user_id: str) -> dict[str, object]:

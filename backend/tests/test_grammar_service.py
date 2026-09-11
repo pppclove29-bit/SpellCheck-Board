@@ -1,9 +1,14 @@
 from collections.abc import Callable
+from dataclasses import replace
 
 import pytest
 
+from datetime import datetime, timezone
+
+from app.config import BudgetPolicy
 from app.schemas import FeedbackMode
-from app.services.ai_nlp import AiAnalysis, AiSuggestion, AiUnavailableError
+from app.services.ai_nlp import AiAnalysis, AiResult, AiSuggestion, AiUnavailableError
+from app.services.budget import BudgetGuard, InMemorySpendStore, utc_month
 from app.services.grammar_service import GrammarService
 from app.services.quota import InMemoryQuotaStore
 from app.utils.rule_engine import RuleEngine
@@ -18,17 +23,15 @@ class FakeAi:
         self.calls: list[tuple[str, FeedbackMode]] = []
         self._respond = respond
 
-    async def analyze(self, masked_text: str, mode: FeedbackMode) -> AiAnalysis:
+    async def analyze(self, masked_text: str, mode: FeedbackMode) -> AiResult:
         self.calls.append((masked_text, mode))
-        return self._respond(masked_text)
+        return AiResult(self._respond(masked_text), prompt_tokens=1000, completion_tokens=500)
 
 
 def analysis(suggestions: list[AiSuggestion] | None = None, wit: str | None = None, has_error: bool | None = None) -> AiAnalysis:
     suggestions = suggestions or []
     return AiAnalysis(
-        original_text="",
         has_error=bool(suggestions) if has_error is None else has_error,
-        corrected_text="",
         wit_feedback=wit,
         suggestions=suggestions,
     )
@@ -64,6 +67,7 @@ async def test_rule_only_v4_shape() -> None:
         ],
         "engine": "rule",
         "ai_status": "unavailable",
+        "ai_notice": None,
         "quota": {"is_pro": False, "limit": 5, "used": 0, "bonus": 0, "remaining": 5},
     }
 
@@ -176,6 +180,76 @@ async def test_unexpected_errors_propagate() -> None:
     service, _ = setup(FakeAi(boom))
     with pytest.raises(TypeError):
         await service.check("u", "안녕", "spicy_wit")
+
+
+PRICED = BudgetPolicy(warn_usd=100, cap_usd=200, price_input_per_m=1.0, price_output_per_m=2.0)
+THIS_MONTH = utc_month(datetime.now(timezone.utc))
+
+
+async def test_budget_cap_pauses_ai_with_notice_and_no_charge() -> None:
+    spend = InMemorySpendStore()
+    await spend.add(THIS_MONTH, 200.0)
+    ai = FakeAi(lambda _: analysis())
+    service = GrammarService(rules, ai, InMemoryQuotaStore(POLICY), budget=BudgetGuard(spend, PRICED))
+
+    res = await service.check("u", "내일 갈께", "spicy_wit")
+
+    assert ai.calls == []
+    assert (res.ai_status, res.engine, res.ai_notice) == ("paused", "rule", "오늘 AI 선생님이 퇴근했습니다 😴")
+    assert res.has_error and res.suggestions[0].suggested_word == "갈게"
+    assert res.quota.used == 0
+    assert await service.ai_paused()
+
+
+async def test_fresh_ai_calls_record_spend_but_cache_hits_do_not() -> None:
+    spend = InMemorySpendStore()
+    service = GrammarService(rules, FakeAi(lambda _: analysis()), InMemoryQuotaStore(POLICY), budget=BudgetGuard(spend, PRICED))
+    await service.check("u", "안녕하세요", "spicy_wit")
+    await service.check("u", "안녕하세요", "spicy_wit")
+    assert await spend.month_total(THIS_MONTH) == pytest.approx(1000 / 1e6 * 1.0 + 500 / 1e6 * 2.0)
+
+
+async def test_failed_ai_calls_still_count_billed_tokens() -> None:
+    def refused(_: str) -> AiAnalysis:
+        raise AiUnavailableError("refused", prompt_tokens=2000, completion_tokens=0)
+
+    spend = InMemorySpendStore()
+    service = GrammarService(rules, FakeAi(refused), InMemoryQuotaStore(POLICY), budget=BudgetGuard(spend, PRICED))
+    res = await service.check("u", "안녕", "gentle")
+    assert res.ai_status == "unavailable"
+    assert await spend.month_total(THIS_MONTH) == pytest.approx(0.002)
+
+
+@pytest.mark.parametrize("text", ["가" * 151, "ㅋㅋㅋㅋ", "ok 123", "안", "😀😀"], ids=["too-long", "jamo", "latin-digits", "one-syllable", "emoji"])
+async def test_ineligible_text_skips_ai(text: str) -> None:
+    ai = FakeAi(lambda _: analysis())
+    service, quota = setup(ai)
+    res = await service.check("u", text, "spicy_wit")
+    assert (res.ai_status, res.engine, ai.calls) == ("skipped", "rule", [])
+    assert (await quota.get_status("u")).used == 0
+
+
+async def test_long_text_still_gets_rule_corrections() -> None:
+    service, _ = setup(FakeAi(lambda _: analysis()))
+    res = await service.check("u", "몇일" + "가" * 150, "gentle")
+    assert res.ai_status == "skipped" and res.suggestions[0].suggested_word == "며칠"
+
+
+async def test_attempt_cap_rate_limits_but_cache_hits_are_free() -> None:
+    ai = FakeAi(lambda _: analysis())
+    quota = InMemoryQuotaStore(replace(POLICY, free_daily_attempts=2))
+    service = GrammarService(rules, ai, quota)
+    assert (await service.check("u", "안녕하세요", "spicy_wit")).ai_status == "used"
+    assert (await service.check("u", "반갑습니다", "spicy_wit")).ai_status == "used"
+    assert (await service.check("u", "안녕하세요", "spicy_wit")).ai_status == "used"  # cache hit, no attempt
+    res = await service.check("u", "고맙습니다", "spicy_wit")
+    assert (res.ai_status, res.engine, len(ai.calls)) == ("rate_limited", "rule", 2)
+
+
+async def test_ai_wit_is_clamped() -> None:
+    service, _ = setup(FakeAi(lambda _: analysis([sugg("좋와요", "좋아요")], wit="가" * 300)))
+    res = await service.check("u", "좋와요", "spicy_wit")
+    assert len(res.wit_feedback) == 120 and res.wit_feedback.endswith("…")
 
 
 async def test_ai_results_cached_per_mode_and_masked_text() -> None:

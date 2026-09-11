@@ -84,11 +84,11 @@ curl -s localhost:8790/v1/grammar-check -H 'content-type: application/json' -H '
 ## 진행 상태
 
 - [x] API 계약서, 공통 규칙 파일(사전 130개 + 패턴 11개, 매운맛 전용 멘트 48개), 골든 테스트(교정 29 · 피드백 6 · 유형 4)
-- [x] 백엔드: 규칙 엔진, PII 마스킹, OpenAI 구조화 출력 연동, 쿼터/광고 보상/PRO, Supabase JWT 인증, AdMob SSV — pytest 109개 통과 (OpenAI는 HTTP 모킹으로 검증)
+- [x] 백엔드: 규칙 엔진, PII 마스킹, OpenAI 구조화 출력 연동, 쿼터/광고 보상/PRO, Supabase JWT 인증, AdMob SSV — pytest 128개 통과 (OpenAI는 HTTP 모킹으로 검증)
 - [x] Supabase 마이그레이션: Postgres 18(PGlite)에서 적용 + 쿼터 상한·광고 멱등/일일 상한·PRO 만료·클라이언트 RPC 차단·단축어 RLS 검증 (실제 Supabase 프로젝트 적용은 미확인)
 - [ ] 백엔드: 실제 OpenAI 키로 응답 품질 확인, Vercel 실배포 확인
 - [ ] 인앱 결제 영수증 검증(Google Play Developer API) → `entitlements` 갱신 (3주차)
 - [ ] AdMob SDK 연동 (호스트 앱 보상형 광고 화면, 3주차)
-- [x] Android 키보드·호스트 앱 (구글 로그인, 충전 팝업, AI 동의, 계정 삭제 포함) — 단위 테스트 122개 통과, 디버그 APK 빌드 (`cd android && ./gradlew :keyboard:testDebugUnitTest :app:assembleDebug`)
+- [x] Android 키보드·호스트 앱 (구글 로그인, 충전 팝업, AI 동의, 계정 삭제, 예산 중단·AI 대상 사전 판정 포함) — 단위 테스트 133개 통과, 디버그 APK 빌드 (`cd android && ./gradlew :keyboard:testDebugUnitTest :app:assembleDebug`)
 - [ ] Android 실기기/에뮬레이터 동작 확인
 - [ ] iOS — 보류

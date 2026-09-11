@@ -16,12 +16,14 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -51,6 +53,7 @@ fun OnboardingScreen(
     var status by remember { mutableStateOf(ImeStatus.read(context)) }
     var testText by remember { mutableStateOf("") }
     val signIn = rememberGoogleSignIn(services)
+    var loginSkipped by rememberSaveable { mutableStateOf(false) }
 
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { status = ImeStatus.read(context) }
     LaunchedEffect(focusTick) { status = ImeStatus.read(context) }
@@ -111,13 +114,17 @@ fun OnboardingScreen(
             }
             else -> StepCard(
                 number = 3,
-                title = "Google로 로그인",
-                done = authState is AuthState.SignedIn,
-                doneText = (authState as? AuthState.SignedIn)?.let { "로그인됨 · ${it.email ?: "Google 계정"}" },
-                description = "로그인하면 AI 훈수·충전·PRO를 쓸 수 있어요. 로그인하지 않아도 기기 안 맞춤법 검사는 무료로 돼요.",
+                title = "Google로 로그인 (선택)",
+                done = authState is AuthState.SignedIn || loginSkipped,
+                doneText = (authState as? AuthState.SignedIn)?.let { "로그인됨 · ${it.email ?: "Google 계정"}" }
+                    ?: "나중에 설정에서 로그인할 수 있어요. 로그인 없이도 키보드와 기기 안 맞춤법 검사는 모두 돼요.",
+                description = "로그인하면 AI 훈수·충전·PRO를 쓸 수 있어요. 로그인하지 않아도 기기 안 맞춤법 검사와 " +
+                    "매운맛·상냥한 피드백은 그대로 쓸 수 있어요.",
                 buttonLabel = if (signIn.busy) "로그인 중…" else "Google로 로그인",
                 enabled = !signIn.busy,
-                onClick = signIn::signIn,
+                onClick = { signIn.signIn() },
+                secondaryLabel = "나중에 하기",
+                onSecondary = { loginSkipped = true },
                 footer = signIn.message,
             )
         }
@@ -128,8 +135,11 @@ fun OnboardingScreen(
             AiToggleRow(
                 services,
                 settings,
+                authState,
+                signIn,
                 title = "AI 훈수",
-                description = "기본값은 꺼짐이에요. 켜면 문장이 끝날 때 그 문장을 AI로 한 번 더 검사해요.",
+                description = "기본값은 꺼짐이에요. 켜면 문장이 끝날 때 그 문장을 AI로 한 번 더 검사해요. " +
+                    "처음 켤 때 한 번만 데이터 전송 동의를 받아요. 설정에서 언제든 켜고 끌 수 있어요.",
             )
         }
 
@@ -160,6 +170,8 @@ private fun StepCard(
     enabled: Boolean = true,
     doneText: String? = null,
     footer: String? = null,
+    secondaryLabel: String? = null,
+    onSecondary: (() -> Unit)? = null,
     onClick: () -> Unit,
 ) {
     SectionCard {
@@ -178,6 +190,9 @@ private fun StepCard(
         if (!done) {
             Spacer(Modifier.height(10.dp))
             Button(onClick = onClick, enabled = enabled, modifier = Modifier.fillMaxWidth()) { Text(buttonLabel) }
+            if (secondaryLabel != null && onSecondary != null) {
+                TextButton(onClick = onSecondary, modifier = Modifier.fillMaxWidth()) { Text(secondaryLabel) }
+            }
         }
         footer?.let { Text(it, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 6.dp)) }
     }

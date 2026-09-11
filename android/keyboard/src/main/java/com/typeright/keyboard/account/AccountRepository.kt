@@ -1,6 +1,7 @@
 package com.typeright.keyboard.account
 
 import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
@@ -15,8 +16,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
 /**
- * Caches `/v1/me` (PRO flag + AI quota) in the shared DataStore. Refreshed on keyboard start, after a rewarded ad
- * and after a purchase; grammar-check responses update the quota in between.
+ * Caches `/v1/me` (PRO flag, AI quota, AI pause) in the shared DataStore. Refreshed on keyboard start (see
+ * [AccountState.isRefreshDue]), after a rewarded ad and after a purchase; grammar-check responses update it in between.
  */
 class AccountRepository internal constructor(
     private val dataStore: DataStore<Preferences>,
@@ -38,6 +39,7 @@ class AccountRepository internal constructor(
             isPro = p[IS_PRO] ?: false,
             quota = quota,
             fetchedAtMillis = p[FETCHED_AT] ?: 0L,
+            aiPaused = p[AI_PAUSED] ?: false,
         )
     }.distinctUntilChanged()
 
@@ -49,6 +51,7 @@ class AccountRepository internal constructor(
             dataStore.edit { p ->
                 p[USER_ID] = r.value.userId
                 p[IS_PRO] = r.value.isPro
+                p[AI_PAUSED] = r.value.aiPaused
                 p[FETCHED_AT] = nowMillis()
                 r.value.quota?.let { writeQuota(p, it) }
             }
@@ -57,16 +60,22 @@ class AccountRepository internal constructor(
         is ApiResult.Failure -> false
     }
 
-    /** Refreshes only if the cache is older than [maxAgeMillis]. */
-    suspend fun refreshIfStale(maxAgeMillis: Long = STALE_AFTER_MS): Boolean {
-        val age = nowMillis() - current().fetchedAtMillis
-        return if (age >= maxAgeMillis) refresh() else true
-    }
+    /** Refreshes only when due (5 min normally, 1 h while AI is paused). */
+    suspend fun refreshIfStale(): Boolean =
+        if (current().isRefreshDue(nowMillis())) refresh() else true
 
     suspend fun updateQuota(quota: Quota) {
         dataStore.edit { p ->
             writeQuota(p, quota)
             p[IS_PRO] = quota.isPro
+        }
+    }
+
+    /** A grammar-check answered `ai_status = paused`: stop AI requests until `/v1/me` says otherwise (≥ 1 h). */
+    suspend fun markAiPaused() {
+        dataStore.edit { p ->
+            p[AI_PAUSED] = true
+            p[FETCHED_AT] = nowMillis()
         }
     }
 
@@ -76,6 +85,7 @@ class AccountRepository internal constructor(
             p.remove(USER_ID)
             p.remove(IS_PRO)
             p.remove(FETCHED_AT)
+            p.remove(AI_PAUSED)
             p.remove(LIMIT)
             p.remove(USED)
             p.remove(BONUS)
@@ -83,7 +93,7 @@ class AccountRepository internal constructor(
         }
     }
 
-    private fun writeQuota(p: androidx.datastore.preferences.core.MutablePreferences, q: Quota) {
+    private fun writeQuota(p: MutablePreferences, q: Quota) {
         p[LIMIT] = q.limit
         p[USED] = q.used
         p[BONUS] = q.bonus
@@ -91,10 +101,10 @@ class AccountRepository internal constructor(
     }
 
     private companion object {
-        const val STALE_AFTER_MS = 5 * 60_000L
         val USER_ID = stringPreferencesKey("account_user_id")
         val IS_PRO = booleanPreferencesKey("account_is_pro")
         val FETCHED_AT = longPreferencesKey("account_fetched_at")
+        val AI_PAUSED = booleanPreferencesKey("account_ai_paused")
         val LIMIT = intPreferencesKey("quota_limit")
         val USED = intPreferencesKey("quota_used")
         val BONUS = intPreferencesKey("quota_bonus")

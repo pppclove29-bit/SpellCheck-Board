@@ -46,8 +46,19 @@ class SettingsRepository private constructor(private val dataStore: DataStore<Pr
         }
     }
 
-    suspend fun disableAi() {
-        dataStore.edit { it[Keys.AI_ENABLED] = false }
+    /**
+     * Turns AI on/off. Consent is asked only once (the first time AI is enabled); after that the toggle is free.
+     * Turning on without recorded consent does nothing and returns false (the caller shows the consent dialog).
+     */
+    suspend fun setAiEnabled(enabled: Boolean): Boolean {
+        var applied = false
+        dataStore.edit { p ->
+            if (!enabled || p[Keys.AI_CONSENT_AT] != null) {
+                p[Keys.AI_ENABLED] = enabled
+                applied = true
+            }
+        }
+        return applied
     }
 
     suspend fun setFeedbackMode(mode: FeedbackMode) {
@@ -99,15 +110,22 @@ class SettingsRepository private constructor(private val dataStore: DataStore<Pr
     }
 
     /** Adds remote-only shortcuts pulled by sync; never overwrites local entries (local is the source of truth). */
-    suspend fun addShortcutsIfAbsent(pulled: List<Shortcut>) {
+    suspend fun addShortcutsIfAbsent(pulled: List<Shortcut>): Int {
+        var added = 0
         dataStore.edit { p ->
             val current = customShortcuts(p)
             val keys = current.mapTo(HashSet()) { it.key }
-            p[Keys.SHORTCUTS] = ShortcutCodec.encode(current + pulled.filter { it.key !in keys && !ShortcutRules.isBuiltIn(it.key) })
+            val fresh = pulled.filter { it.key !in keys && !ShortcutRules.isBuiltIn(it.key) }.distinctBy { it.key }
+            added = fresh.size
+            p[Keys.SHORTCUTS] = ShortcutCodec.encode(current + fresh)
         }
+        return added
     }
 
-    /** Account deletion: drops user data stored on the device (custom shortcuts + pending sync state). */
+    /**
+     * Logout / account deletion: drops account-bound data stored on the device (custom shortcuts + pending sync
+     * state). Device preferences (layout, feedback mode, AI toggle and consent) are kept.
+     */
     suspend fun clearUserData() {
         dataStore.edit { p ->
             p.remove(Keys.SHORTCUTS)

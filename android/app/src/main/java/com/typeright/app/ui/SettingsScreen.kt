@@ -39,6 +39,8 @@ import com.typeright.keyboard.settings.KoreanLayout
 import com.typeright.keyboard.settings.TypeRightSettings
 import kotlinx.coroutines.launch
 
+const val LOGOUT_TEXT = "PRO 단축어는 다시 로그인하면 자동으로 복원돼요."
+
 const val DELETE_ACCOUNT_TEXT =
     "계정을 삭제하면 서버에 저장된 계정 정보(AI 훈수 사용 기록·충전 내역·동기화된 단축어)가 삭제되고 되돌릴 수 없어요.\n\n" +
         "이용 중인 Play 스토어 정기 결제(PRO)는 계정을 삭제해도 자동으로 해지되지 않아요. " +
@@ -54,6 +56,7 @@ fun SettingsScreen(
     val scope = rememberCoroutineScope()
     val signIn = rememberGoogleSignIn(services)
     var confirmDelete by remember { mutableStateOf(false) }
+    var confirmLogout by remember { mutableStateOf(false) }
     var accountMessage by remember { mutableStateOf<String?>(null) }
 
     Column(
@@ -76,12 +79,7 @@ fun SettingsScreen(
                     Text("Google 계정: ${authState.email ?: authState.userId}", style = MaterialTheme.typography.bodyMedium)
                     Spacer(Modifier.height(8.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(onClick = {
-                            scope.launch {
-                                services.signOut()
-                                accountMessage = "로그아웃했어요."
-                            }
-                        }) { Text("로그아웃") }
+                        OutlinedButton(onClick = { confirmLogout = true }) { Text("로그아웃") }
                         TextButton(
                             onClick = { confirmDelete = true },
                             colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
@@ -90,11 +88,11 @@ fun SettingsScreen(
                 }
                 AuthState.SignedOut -> {
                     Text(
-                        "로그인하지 않았어요. 기기 안 맞춤법 검사는 로그인 없이도 돼요.",
+                        "로그인하지 않았어요. 키보드와 기기 안 맞춤법 검사, 매운맛·상냥한 피드백은 로그인 없이도 돼요.",
                         style = MaterialTheme.typography.bodySmall,
                     )
                     Spacer(Modifier.height(8.dp))
-                    Button(onClick = signIn::signIn, enabled = !signIn.busy) {
+                    Button(onClick = { signIn.signIn() }, enabled = !signIn.busy) {
                         Text(if (signIn.busy) "로그인 중…" else "Google로 로그인")
                     }
                 }
@@ -109,17 +107,29 @@ fun SettingsScreen(
             if (!account.isPro) RechargeButton(account)
         }
 
-        SectionCard { AiToggleRow(services, settings) }
+        SectionCard { AiToggleRow(services, settings, authState, signIn) }
 
         SectionCard {
             Text("피드백 모드", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             FeedbackMode.entries.forEach { mode ->
-                val note = if (mode == FeedbackMode.POLICE && !account.isPro) "\n무료 플랜: 진동 경고만 (입력 차단은 PRO)" else ""
+                val note = when {
+                    mode != FeedbackMode.POLICE -> ""
+                    !authState.isSignedIn -> "\n로그인이 필요해요."
+                    !account.isPro -> "\n무료 플랜: 진동 경고만 (입력 차단은 PRO)"
+                    else -> ""
+                }
                 OptionRow(
                     title = mode.label,
                     description = mode.description + note,
                     selected = settings.feedbackMode == mode,
-                    onSelect = { scope.launch { services.settings.setFeedbackMode(mode) } },
+                    onSelect = {
+                        if (mode == FeedbackMode.POLICE && !authState.isSignedIn) {
+                            // Police mode needs an account: log in first; on cancel the mode stays unchanged.
+                            signIn.signIn(then = { services.settings.setFeedbackMode(mode) })
+                        } else {
+                            scope.launch { services.settings.setFeedbackMode(mode) }
+                        }
+                    },
                 )
             }
         }
@@ -140,6 +150,24 @@ fun SettingsScreen(
                 )
             }
         }
+    }
+
+    if (confirmLogout) {
+        AlertDialog(
+            onDismissRequest = { confirmLogout = false },
+            title = { Text("로그아웃할까요?") },
+            text = { Text(LOGOUT_TEXT) },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmLogout = false
+                    scope.launch {
+                        services.signOut()
+                        accountMessage = "로그아웃했어요."
+                    }
+                }) { Text("로그아웃") }
+            },
+            dismissButton = { TextButton(onClick = { confirmLogout = false }) { Text("취소") } },
+        )
     }
 
     if (confirmDelete) {

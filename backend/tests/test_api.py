@@ -104,6 +104,7 @@ def test_me_returns_plan_and_quota() -> None:
         "user_id": "u9",
         "is_pro": False,
         "quota": {"is_pro": False, "limit": 5, "used": 0, "bonus": 0, "remaining": 5},
+        "ai_paused": False,
     }
 
 

@@ -20,6 +20,7 @@ import com.typeright.keyboard.TypeRightServices
 import com.typeright.keyboard.account.AccountState
 import com.typeright.keyboard.auth.AuthState
 import com.typeright.keyboard.settings.TypeRightSettings
+import kotlinx.coroutines.flow.first
 
 enum class AppTab(val label: String, val icon: String) {
     ONBOARDING("시작하기", "⌨️"),
@@ -44,9 +45,10 @@ fun TypeRightApp(requestedTab: AppTab?, onRequestedTabConsumed: () -> Unit, focu
         }
     }
 
-    // Host-app open / sign-in: cache /v1/me (PRO + quota), then sync PRO custom shortcuts with Supabase.
-    LaunchedEffect(authState.isSignedIn) {
-        if (authState.isSignedIn) {
+    // Host-app open (already signed in): cache /v1/me (PRO + quota), then sync custom shortcuts with Supabase.
+    // Fresh sign-ins do the same inside GoogleSignInState (which also reports restored shortcuts).
+    LaunchedEffect(Unit) {
+        if (services.auth.authState.first().isSignedIn) {
             services.account.refresh()
             services.shortcutSync.sync(services.account.current().isPro)
         }

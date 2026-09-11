@@ -57,8 +57,15 @@ class TypeRightServices private constructor(context: Context) {
         RuleEngine(RulesParser.parse(json))
     }
 
-    /** Sign out: clears the session, the cached account and local user data (via onSignedOut). */
-    suspend fun signOut() = auth.signOut()
+    /**
+     * Logout: first flush pending shortcut changes (best effort — PRO pushes, owner deletes), then sign out, which
+     * clears the session, the cached account and local user data (via onSignedOut). PRO shortcuts are restored by
+     * the sync pull on the next sign-in. Device preferences (incl. AI consent) are kept.
+     */
+    suspend fun signOut() {
+        runCatching { shortcutSync.sync(account.current().isPro) }
+        auth.signOut()
+    }
 
     /**
      * Account deletion: `DELETE /v1/me` (204) → sign out, which clears the session, the cached account and local

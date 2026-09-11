@@ -12,9 +12,7 @@ from app.services.openai_nlp import OpenAiNlpService
 pytestmark = pytest.mark.anyio
 
 ANALYSIS = {
-    "original_text": "오늘 진짜 어의가 없네",
     "has_error": True,
-    "corrected_text": "오늘 진짜 어이가 없네",
     "wit_feedback": "어의는 궁궐 의사입니다 🩺",
     "suggestions": [
         {"offset": 6, "length": 2, "original_word": "어의", "suggested_word": "어이", "type": "spelling", "reason": "'어이없다'가 표준어입니다."}
@@ -49,9 +47,13 @@ async def test_parses_structured_output_and_sends_strict_schema() -> None:
 
     result = await svc.analyze("오늘 진짜 어의가 없네", "police")
 
-    assert result.model_dump() == ANALYSIS
+    assert result.analysis.model_dump() == ANALYSIS
+    assert (result.prompt_tokens, result.completion_tokens) == (1, 1)
     body = json.loads(requests[0].content)
     assert body["model"] == "gpt-4o-mini"
+    assert body["max_completion_tokens"] == 400
+    schema_fields = set(body["response_format"]["json_schema"]["schema"]["properties"])
+    assert schema_fields == {"has_error", "wit_feedback", "suggestions"}  # no echoed original/corrected text
     assert body["response_format"]["type"] == "json_schema"
     assert body["response_format"]["json_schema"]["strict"] is True
     assert body["messages"][1]["content"] == "mode: police\n<text>오늘 진짜 어의가 없네</text>"

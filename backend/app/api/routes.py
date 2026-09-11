@@ -24,7 +24,7 @@ async def grammar_check(body: GrammarCheckRequest, request: Request, c: Containe
 async def me(request: Request, c: Container = Depends(get_container)) -> MeResponse:
     user_id = await c.auth.authenticate(request.headers)
     quota = await c.quota_store.get_status(user_id)
-    return MeResponse(user_id=user_id, is_pro=quota.is_pro, quota=quota)
+    return MeResponse(user_id=user_id, is_pro=quota.is_pro, quota=quota, ai_paused=await c.grammar_service.ai_paused())
 
 
 @router.delete("/v1/me", status_code=204)

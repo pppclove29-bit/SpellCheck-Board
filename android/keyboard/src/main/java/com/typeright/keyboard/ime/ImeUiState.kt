@@ -18,6 +18,7 @@ enum class BarStatus(val label: String) {
     CHECKING("AI 검사 중"),
     OFFLINE("오프라인"),
     AI_OFF("AI 꺼짐"),
+    AI_PAUSED("AI 휴식 중"),
     SECURE("보안 키패드"),
 }
 
@@ -43,7 +44,8 @@ data class BarState(
     val rechargeEmphasized: Boolean = false,
 )
 
-enum class FeedbackStyle { BUBBLE, POLICE, TIP, REASON }
+/** NOTICE: server notices such as the AI-paused `ai_notice`. */
+enum class FeedbackStyle { BUBBLE, POLICE, TIP, REASON, NOTICE }
 
 @Immutable
 data class FeedbackUi(val id: Long, val style: FeedbackStyle, val text: String) {

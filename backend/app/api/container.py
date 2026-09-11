@@ -11,6 +11,7 @@ from app.config import Settings
 from app.services.account import AccountDeleter, InMemoryAccountDeleter, SupabaseAccountDeleter
 from app.services.admob_ssv import CachedAdmobKeyFetcher, KeyFetcher
 from app.services.auth import AuthVerifier, InsecureDevAuth, SupabaseJwtVerifier
+from app.services.budget import BudgetGuard, InMemorySpendStore, SpendStore, SupabaseSpendStore, WebhookAlerter
 from app.services.grammar_service import GrammarService
 from app.services.openai_nlp import OpenAiNlpService
 from app.services.quota import InMemoryQuotaStore, QuotaStore, SupabaseQuotaStore
@@ -34,12 +35,15 @@ def build_container(settings: Settings) -> Container:
 
     quota_store: QuotaStore
     account_deleter: AccountDeleter
+    spend_store: SpendStore
     if settings.supabase_url and settings.supabase_service_role_key:
         quota_store = SupabaseQuotaStore(http, settings.supabase_url, settings.supabase_service_role_key, settings.quota)
         account_deleter = SupabaseAccountDeleter(http, settings.supabase_url, settings.supabase_service_role_key)
+        spend_store = SupabaseSpendStore(http, settings.supabase_url, settings.supabase_service_role_key)
     elif settings.insecure_dev_auth:
         in_memory = InMemoryQuotaStore(settings.quota)
         quota_store, account_deleter = in_memory, InMemoryAccountDeleter(in_memory)
+        spend_store = InMemorySpendStore()
     else:
         raise RuntimeError("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required (or ALLOW_INSECURE_DEV_AUTH=true for local dev)")
 
@@ -51,11 +55,18 @@ def build_container(settings: Settings) -> Container:
     else:
         raise RuntimeError("SUPABASE_URL is required (or ALLOW_INSECURE_DEV_AUTH=true for local dev)")
 
-    ai = OpenAiNlpService(AsyncOpenAI(), settings.openai_model, settings.ai_timeout_s) if settings.ai_enabled else None
+    ai = (
+        OpenAiNlpService(AsyncOpenAI(), settings.openai_model, settings.ai_timeout_s, settings.ai_max_output_tokens)
+        if settings.ai_enabled
+        else None
+    )
+    alert = WebhookAlerter(http, settings.budget_alert_webhook_url) if settings.budget_alert_webhook_url else None
     grammar_service = GrammarService(
         RuleEngine(),
         ai,
         quota_store,
+        budget=BudgetGuard(spend_store, settings.budget, alert),
+        ai_max_input_chars=settings.ai_max_input_chars,
         on_ai_error=lambda err: log.warning("AI check degraded to rule engine: %s", err),
     )
     return Container(

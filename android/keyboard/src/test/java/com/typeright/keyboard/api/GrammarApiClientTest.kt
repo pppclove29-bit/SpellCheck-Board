@@ -197,4 +197,41 @@ class GrammarApiClientTest {
         assertEquals("Bearer tok", req.headers["Authorization"])
         assertEquals(null, req.body)
     }
+
+    @Test
+    fun pausedStatusCarriesNotice() = runTest {
+        val body = """{"original_text":"$text","has_error":true,"corrected_text":"오늘 진짜 어이가 없네",
+            "wit_feedback":"rule wit","suggestions":[{"offset":6,"length":2,"original_word":"어의","suggested_word":"어이",
+            "type":"spelling","reason":"r","source":"rule"}],"engine":"rule","ai_status":"paused",
+            "ai_notice":"오늘 AI 선생님이 퇴근했습니다 😴","quota":{"is_pro":false,"limit":5,"used":0,"bonus":0,"remaining":5}}"""
+        val client = GrammarApiClient("http://h", FakeAuth(mapOf("X-Dev-User-Id" to "d")),
+            FakeTransport(HttpResponse(200, body)), UnconfinedTestDispatcher(testScheduler))
+        val r = (client.grammarCheck(text, FeedbackMode.SPICY_WIT) as ApiResult.Success).value
+        assertEquals(AiStatus.PAUSED, r.aiStatus)
+        assertEquals("오늘 AI 선생님이 퇴근했습니다 😴", r.aiNotice)
+        assertEquals(1, r.suggestions.size)
+    }
+
+    @Test
+    fun unknownFieldsAndFutureEnumValuesAreTolerated() = runTest {
+        val body = """{"original_text":"$text","has_error":false,"corrected_text":"$text","wit_feedback":null,
+            "suggestions":[],"engine":"something_new","ai_status":"future_status","ai_notice":null,
+            "brand_new_field":{"nested":[1,2,3]},"quota":{"is_pro":false,"limit":5,"used":0,"bonus":0,"remaining":5,"extra":true}}"""
+        val client = GrammarApiClient("http://h", FakeAuth(mapOf("X-Dev-User-Id" to "d")),
+            FakeTransport(HttpResponse(200, body)), UnconfinedTestDispatcher(testScheduler))
+        val r = (client.grammarCheck(text, FeedbackMode.SPICY_WIT) as ApiResult.Success).value
+        assertEquals(AiStatus.UNAVAILABLE, r.aiStatus)
+        assertEquals(null, r.aiNotice)
+        assertEquals(5, r.quota!!.remaining)
+    }
+
+    @Test
+    fun meReportsAiPaused() = runTest {
+        val paused = FakeTransport(HttpResponse(200, """{"user_id":"u","is_pro":false,"ai_paused":true,"quota":null,"new":1}"""))
+        val client = GrammarApiClient("http://h", FakeAuth(mapOf("X-Dev-User-Id" to "d")), paused, UnconfinedTestDispatcher(testScheduler))
+        assertTrue((client.me() as ApiResult.Success).value.aiPaused)
+        val legacy = FakeTransport(HttpResponse(200, """{"user_id":"u","is_pro":false}"""))
+        val client2 = GrammarApiClient("http://h", FakeAuth(mapOf("X-Dev-User-Id" to "d")), legacy, UnconfinedTestDispatcher(testScheduler))
+        assertEquals(false, (client2.me() as ApiResult.Success).value.aiPaused)
+    }
 }

@@ -117,7 +117,7 @@ class ShortcutSyncTest {
             RemoteShortcut("id-d", "d", "4"), // deleted locally → delete
             RemoteShortcut("id-e", "e", "remote"), // differs → local wins
         )
-        val plan = ShortcutSyncPlanner.plan(local, remote, tombstones = setOf("d"))
+        val plan = ShortcutSyncPlanner.plan(local, remote, tombstones = setOf("d"), canPush = true)
         assertEquals(listOf(Shortcut("b", "2"), Shortcut("e", "local")), plan.upserts)
         assertEquals(listOf("id-d"), plan.deleteIds)
         assertEquals(listOf(Shortcut("c", "3")), plan.pulled)
@@ -129,8 +129,43 @@ class ShortcutSyncTest {
             local = listOf(Shortcut("a", "new")),
             remote = listOf(RemoteShortcut("id-a", "a", "old")),
             tombstones = setOf("a"),
+            canPush = true,
         )
         assertEquals(emptyList<String>(), plan.deleteIds)
         assertEquals(listOf(Shortcut("a", "new")), plan.upserts)
+    }
+
+    @Test
+    fun nonProPullsAndDeletesButNeverPushes() {
+        val plan = ShortcutSyncPlanner.plan(
+            local = listOf(Shortcut("a", "local-only"), Shortcut("e", "changed")),
+            remote = listOf(
+                RemoteShortcut("id-c", "c", "3"),
+                RemoteShortcut("id-d", "d", "4"),
+                RemoteShortcut("id-e", "e", "remote"),
+            ),
+            tombstones = setOf("d"),
+            canPush = false,
+        )
+        assertEquals(emptyList<Shortcut>(), plan.upserts) // RLS: insert/update is PRO-only
+        assertEquals(listOf("id-d"), plan.deleteIds) // owners may always delete
+        assertEquals(listOf(Shortcut("c", "3")), plan.pulled) // expired users get their shortcuts back
+    }
+}
+
+class ShortcutAccessTest {
+    @Test
+    fun addAndEditGate() {
+        assertEquals(ShortcutAccess.ALLOWED, ShortcutAccess.forAddOrEdit(isPro = true, hasCustomShortcuts = false))
+        assertEquals(ShortcutAccess.ALLOWED, ShortcutAccess.forAddOrEdit(isPro = true, hasCustomShortcuts = true))
+        assertEquals(ShortcutAccess.EXPIRED, ShortcutAccess.forAddOrEdit(isPro = false, hasCustomShortcuts = true))
+        assertEquals(ShortcutAccess.PAYWALL, ShortcutAccess.forAddOrEdit(isPro = false, hasCustomShortcuts = false))
+    }
+
+    @Test
+    fun customShortcutsKeepWorkingWithoutPro() {
+        // The keyboard matches built-ins + customs regardless of PRO (only add/edit is gated).
+        val settings = TypeRightSettings(shortcuts = listOf(Shortcut("ㅂㅂ", "바이바이")))
+        assertEquals("바이바이", ShortcutRules.match("그럼 ㅂㅂ", settings.allShortcuts)?.expansion)
     }
 }

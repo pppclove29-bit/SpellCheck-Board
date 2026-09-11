@@ -15,9 +15,19 @@ enum class AiDecision {
 }
 
 object AiCallPolicy {
+    const val MAX_AI_CHARS = 150
+    const val MIN_HANGUL_SYLLABLES = 2
+
+    /**
+     * Same eligibility rule as the server (which otherwise answers `ai_status = skipped`): at most 150 characters
+     * and at least 2 Hangul syllables. Counted in code points because the server's Python `len()` does.
+     */
+    fun isAiEligible(text: String): Boolean =
+        text.codePointCount(0, text.length) <= MAX_AI_CHARS && text.count { it in '가'..'힣' } >= MIN_HANGUL_SYLLABLES
+
     /**
      * AI only at sentence end when: not secure, AI toggle on AND consent recorded, signed in (or dev auth),
-     * network ok, (is_pro || remaining > 0) and the text differs from the previous AI request.
+     * network ok, the text is AI-eligible, (is_pro || remaining > 0) and it differs from the previous AI request.
      */
     fun decide(
         secure: Boolean,
@@ -31,6 +41,9 @@ object AiCallPolicy {
     ): AiDecision = when {
         secure || !aiEnabled || !aiConsented || !signedIn || !networkAvailable -> AiDecision.SKIP
         text.isBlank() || text == lastAiText -> AiDecision.SKIP
+        !isAiEligible(text) -> AiDecision.SKIP
+        // Monthly AI budget paused server-side: on-device only until /v1/me reports ai_paused == false.
+        account.aiPaused -> AiDecision.SKIP
         !account.hasAiQuota -> AiDecision.QUOTA_EXHAUSTED
         else -> AiDecision.CALL
     }

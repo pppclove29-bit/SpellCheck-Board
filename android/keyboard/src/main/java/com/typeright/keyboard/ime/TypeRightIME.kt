@@ -30,6 +30,7 @@ import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.typeright.keyboard.TypeRightServices
 import com.typeright.keyboard.account.AccountState
+import com.typeright.keyboard.api.AiStatus
 import com.typeright.keyboard.api.ApiResult
 import com.typeright.keyboard.check.AiCallPolicy
 import com.typeright.keyboard.check.AiDecision
@@ -559,6 +560,12 @@ class TypeRightIME :
                             remoteResult = requestSnapshot to r.suggestions
                             showCorrections(requestSnapshot, r.suggestions, feedbackOverride = r.witFeedback)
                         }
+                        if (r.aiStatus == AiStatus.PAUSED) {
+                            // Monthly AI budget paused: show the notice once, then on-device only until /v1/me
+                            // reports ai_paused == false (re-checked at keyboard start, at most hourly).
+                            launch { services.account.markAiPaused() }
+                            if (!ui.secure) showFeedback(FeedbackStyle.NOTICE, r.aiNotice ?: AI_PAUSED_FALLBACK)
+                        }
                     }
                     is ApiResult.Failure -> {
                         // Silent fallback: on-device chips stay. UNAUTHENTICATED → signed-out state arrives via authState.
@@ -608,6 +615,7 @@ class TypeRightIME :
         }
         val status = when {
             !settings.aiActive -> BarStatus.AI_OFF
+            account.aiPaused -> BarStatus.AI_PAUSED
             remoteChecking -> BarStatus.CHECKING
             offline -> BarStatus.OFFLINE
             else -> BarStatus.NONE
@@ -757,6 +765,7 @@ class TypeRightIME :
         const val MAX_LOOKBACK = 1000
         const val SIREN_THROTTLE_MS = 600L
         const val POLICE_FALLBACK = "🚨 맞춤법 위반! 교정 칩을 누르거나 '무시'를 눌러야 통과할 수 있어요."
+        const val AI_PAUSED_FALLBACK = "오늘 AI 선생님이 퇴근했습니다 😴"
         val SIREN_TIMINGS = longArrayOf(0, 90, 60, 90, 60, 220)
         val SIREN_AMPLITUDES = intArrayOf(0, 140, 0, 200, 0, 255)
     }

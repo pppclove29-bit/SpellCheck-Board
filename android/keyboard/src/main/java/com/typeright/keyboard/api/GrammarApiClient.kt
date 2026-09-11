@@ -24,6 +24,17 @@ import java.io.IOException
 enum class AiStatus(val apiValue: String) {
     USED("used"),
     QUOTA_EXCEEDED("quota_exceeded"),
+
+    /** Monthly AI budget paused: rule-only result, no quota charge, `ai_notice` explains it. */
+    PAUSED("paused"),
+
+    /** Not AI-eligible (> 150 chars or < 2 Hangul syllables): rule-only, silent. */
+    SKIPPED("skipped"),
+
+    /** Daily AI attempt cap reached (separate from the 훈수 quota; ads don't lift it): rule-only, silent. */
+    RATE_LIMITED("rate_limited"),
+
+    /** Also used for values this client version does not know. */
     UNAVAILABLE("unavailable");
 
     companion object {
@@ -40,9 +51,11 @@ data class GrammarCheckResponse(
     val engine: String,
     val aiStatus: AiStatus,
     val quota: Quota?,
+    /** e.g. "오늘 AI 선생님이 퇴근했습니다 😴" when [aiStatus] is PAUSED; null otherwise. */
+    val aiNotice: String? = null,
 )
 
-data class MeResponse(val userId: String, val isPro: Boolean, val quota: Quota?)
+data class MeResponse(val userId: String, val isPro: Boolean, val quota: Quota?, val aiPaused: Boolean = false)
 
 sealed interface ApiResult<out T> {
     data class Success<T>(val value: T) : ApiResult<T>
@@ -170,6 +183,7 @@ class GrammarApiClient(
             engine = root.str("engine") ?: "rule",
             aiStatus = AiStatus.fromApi(root.str("ai_status")),
             quota = (root["quota"] as? JsonObject)?.let(::parseQuota),
+            aiNotice = root.str("ai_notice")?.takeIf { it.isNotBlank() },
         )
     }
 
@@ -177,7 +191,7 @@ class GrammarApiClient(
         val root = json.parseToJsonElement(body).jsonObject
         val userId = root.str("user_id") ?: return null
         val quota = (root["quota"] as? JsonObject)?.let(::parseQuota)
-        return MeResponse(userId, root.bool("is_pro") ?: quota?.isPro ?: false, quota)
+        return MeResponse(userId, root.bool("is_pro") ?: quota?.isPro ?: false, quota, root.bool("ai_paused") ?: false)
     }
 
     private fun parseQuota(o: JsonObject): Quota? {

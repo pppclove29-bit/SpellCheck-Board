@@ -1,3 +1,5 @@
+import logging
+import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Literal
@@ -5,11 +7,19 @@ from typing import Literal
 from app.schemas import AiStatus, FeedbackMode, GrammarCheckResponse, Suggestion, SuggestionType
 from app.services.ai_nlp import AiAnalysis, AiNlpService, AiSuggestion, AiUnavailableError
 from app.services.anonymizer import MaskResult, contains_placeholder, mask_pii
+from app.services.budget import PAUSED_NOTICE, BudgetGuard
 from app.services.quota import QuotaStore
 from app.utils.feedback import apply_corrections, compose_rule_feedback, rule_suggestion_type
 from app.utils.lru_cache import TtlLruCache
 from app.utils.rule_engine import RuleEngine, select_non_overlapping
 from app.utils.text_offsets import cp_to_utf16, utf16_len, utf16_to_cp
+
+log = logging.getLogger("typeright")
+
+_HANGUL_SYLLABLE = re.compile(r"[가-힣]")
+# Texts with fewer Hangul syllables (ㅋㅋㅋ, emoji, numbers, Latin) have nothing for a Korean grammar model to do.
+MIN_HANGUL_SYLLABLES_FOR_AI = 2
+WIT_MAX_CHARS = 120
 
 
 @dataclass(frozen=True)
@@ -35,6 +45,10 @@ def _find_closest(text: str, word: str, hint: int) -> int:
             best = i
         i = text.find(word, i + 1)
     return best
+
+
+def _clamp(text: str, max_chars: int) -> str:
+    return text if len(text) <= max_chars else text[: max_chars - 1] + "…"
 
 
 def align_ai_suggestions(original: str, mask: MaskResult, ai: list[AiSuggestion]) -> list[_Suggestion]:
@@ -82,18 +96,30 @@ class GrammarService:
         ai: AiNlpService | None,
         quota: QuotaStore,
         *,
+        budget: BudgetGuard | None = None,
+        ai_max_input_chars: int = 150,
         on_ai_error: Callable[[AiUnavailableError], None] | None = None,
         cache: TtlLruCache[str, AiAnalysis] | None = None,
     ) -> None:
         self._rules = rules
         self._ai = ai
         self._quota = quota
+        self._budget = budget
+        self._ai_max_input_chars = ai_max_input_chars
         self._on_ai_error = on_ai_error
         self._cache: TtlLruCache[str, AiAnalysis] = cache or TtlLruCache(1000, 600)
 
     @property
     def ai_available(self) -> bool:
         return self._ai is not None
+
+    async def ai_paused(self) -> bool:
+        """True when the monthly budget cap has been reached (AI configured but switched off)."""
+        return self._ai is not None and self._budget is not None and await self._budget.is_paused()
+
+    def ai_eligible(self, text: str) -> bool:
+        """Only short Korean sentences go to the AI; everything else gets rule-only checks (cost/abuse bound)."""
+        return len(text) <= self._ai_max_input_chars and len(_HANGUL_SYLLABLE.findall(text)) >= MIN_HANGUL_SYLLABLES_FOR_AI
 
     async def check(self, user_id: str, text: str, mode: FeedbackMode) -> GrammarCheckResponse:
         rule_suggestions = [
@@ -108,21 +134,33 @@ class GrammarService:
 
         if self._ai is None:
             ai_status = "unavailable"
+        elif not self.ai_eligible(text):
+            ai_status = "skipped"
+        elif await self.ai_paused():
+            ai_status = "paused"
         elif quota.remaining <= 0:
             ai_status = "quota_exceeded"
         else:
             mask = mask_pii(text)
-            try:
-                analysis = await self._analyze(mask.masked, mode)
-            except AiUnavailableError as err:
-                if self._on_ai_error:
-                    self._on_ai_error(err)
-                ai_status = "unavailable"
+            key = f"{mode}:{mask.masked}"  # masked text only: raw PII never enters the cache
+            analysis = self._cache.get(key)
+            # Cache hits are free; only real model calls count toward the daily attempt cap.
+            if analysis is None and not await self._quota.try_ai_attempt(user_id):
+                ai_status = "rate_limited"
             else:
-                suggestions = merge_suggestions(rule_suggestions, align_ai_suggestions(text, mask, analysis.suggestions))
-                ai_status = "used"
-                if analysis.has_error and analysis.wit_feedback:
-                    ai_wit = mask.unmask(analysis.wit_feedback)
+                try:
+                    if analysis is None:
+                        analysis = await self._call_ai(key, mask.masked, mode)
+                except AiUnavailableError as err:
+                    await self._record_spend(err.prompt_tokens, err.completion_tokens)
+                    if self._on_ai_error:
+                        self._on_ai_error(err)
+                    ai_status = "unavailable"
+                else:
+                    suggestions = merge_suggestions(rule_suggestions, align_ai_suggestions(text, mask, analysis.suggestions))
+                    ai_status = "used"
+                    if analysis.has_error and analysis.wit_feedback:
+                        ai_wit = _clamp(mask.unmask(analysis.wit_feedback), WIT_MAX_CHARS)
 
         has_error = bool(suggestions)
         # Quota is charged only when a 훈수 is actually delivered (AI ran and there is something to fix).
@@ -137,16 +175,22 @@ class GrammarService:
             suggestions=[_to_wire(text, s) for s in suggestions],
             engine="hybrid" if ai_status == "used" else "rule",
             ai_status=ai_status,
+            ai_notice=PAUSED_NOTICE if ai_status == "paused" else None,
             quota=quota,
         )
 
-    async def _analyze(self, masked_text: str, mode: FeedbackMode) -> AiAnalysis:
+    async def _call_ai(self, key: str, masked_text: str, mode: FeedbackMode) -> AiAnalysis:
         assert self._ai is not None
-        # Keyed on masked text only: raw PII never enters the cache.
-        key = f"{mode}:{masked_text}"
-        cached = self._cache.get(key)
-        if cached is not None:
-            return cached
-        analysis = await self._ai.analyze(masked_text, mode)
-        self._cache.set(key, analysis)
-        return analysis
+        result = await self._ai.analyze(masked_text, mode)
+        await self._record_spend(result.prompt_tokens, result.completion_tokens)
+        self._cache.set(key, result.analysis)
+        return result.analysis
+
+    async def _record_spend(self, prompt_tokens: int, completion_tokens: int) -> None:
+        if self._budget is None or (prompt_tokens == 0 and completion_tokens == 0):
+            return
+        try:
+            await self._budget.record(prompt_tokens, completion_tokens)
+        except Exception:
+            # The user already got (or is getting) a response; a bookkeeping failure must not turn it into a 500.
+            log.warning("failed to record AI spend", exc_info=True)

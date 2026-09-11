@@ -90,17 +90,26 @@ class GoogleSignInState internal constructor(
     var message by mutableStateOf<String?>(null)
         private set
 
-    fun signIn() {
+    /**
+     * Opens the Google login. [then] runs only after a successful sign-in (e.g. "turn AI on" / "select police mode");
+     * on cancel or failure nothing else changes.
+     */
+    fun signIn(then: (suspend () -> Unit)? = null) {
         val act = activity ?: return
         if (busy) return
         busy = true
         scope.launch {
             message = when (val r = GoogleSignIn.signIn(act, services)) {
                 is GoogleSignInOutcome.SignedIn -> {
-                    // Cache PRO/quota and pull synced shortcuts for the new user.
+                    // Cache PRO/quota and pull the user's synced shortcuts (restored for any signed-in user).
                     services.account.refresh()
-                    services.shortcutSync.sync(services.account.current().isPro)
-                    "로그인했어요${r.email?.let { ": $it" } ?: ""}"
+                    val sync = services.shortcutSync.sync(services.account.current().isPro)
+                    then?.invoke()
+                    buildString {
+                        append("로그인했어요")
+                        r.email?.let { append(": ").append(it) }
+                        if (sync.pulled > 0) append(" · 단축어 ${sync.pulled}개를 복원했어요")
+                    }
                 }
                 GoogleSignInOutcome.Cancelled -> null
                 is GoogleSignInOutcome.Failed -> r.message
