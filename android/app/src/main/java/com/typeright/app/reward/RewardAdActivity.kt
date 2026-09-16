@@ -31,9 +31,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.typeright.app.ads.AdMobRewardedAdProvider
 import com.typeright.app.ads.RewardedAdProvider
 import com.typeright.app.ads.RewardedAdResult
-import com.typeright.app.ads.StubRewardedAdProvider
 import com.typeright.app.ui.theme.TypeRightTheme
 import com.typeright.keyboard.TypeRightServices
 import com.typeright.keyboard.account.AccountState
@@ -63,9 +63,10 @@ private sealed interface RewardUi {
 @Composable
 private fun RewardAdPopup(
     onClose: () -> Unit,
-    adProvider: RewardedAdProvider = remember { StubRewardedAdProvider() },
+    adProvider: RewardedAdProvider? = null,
 ) {
     val context = LocalContext.current
+    val ads = adProvider ?: remember(context) { AdMobRewardedAdProvider(context) }
     val activity = context as? Activity
     val services = remember { TypeRightServices.get(context) }
     val account by services.account.account.collectAsStateWithLifecycle(initialValue = AccountState())
@@ -84,13 +85,13 @@ private fun RewardAdPopup(
                 ui = RewardUi.Error("로그인이 필요해요. TypeRight 앱에서 Google로 로그인해 주세요.")
                 return@launch
             }
-            if (!adProvider.isAvailable) {
-                ui = RewardUi.Error("광고 준비 중이에요. (AdMob 연동은 다음 마일스톤)")
+            if (!ads.isAvailable) {
+                ui = RewardUi.Error("지금은 광고를 불러올 수 없어요.")
                 return@launch
             }
             services.account.refresh()
             val bonusBefore = services.account.current().quota?.bonus ?: 0
-            when (val r = adProvider.showRewardedAd(act, userId)) {
+            when (val r = ads.showRewardedAd(act, userId)) {
                 RewardedAdResult.Rewarded -> {
                     ui = RewardUi.Working("충전 확인 중…")
                     // The SSV credit is applied server-side asynchronously: poll /v1/me with backoff (≤ ~10 s).

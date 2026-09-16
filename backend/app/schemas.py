@@ -56,6 +56,21 @@ class MeResponse(BaseModel):
     ai_paused: bool = False
 
 
+class PlayVerifyRequest(BaseModel):
+    """Sent right after a Play purchase completes; the token is what the server checks with Google."""
+
+    product_id: str = Field(min_length=1, max_length=200)
+    purchase_token: str = Field(min_length=1, max_length=2000)
+
+
+class PlayVerifyResponse(BaseModel):
+    # activated: PRO is on. inactive/not_found: the purchase does not (or no longer) entitles PRO.
+    # already_claimed: that receipt is bound to another account. unavailable: Play could not be reached — retry.
+    result: Literal["activated", "inactive", "unknown_product", "not_found", "unavailable", "already_claimed"]
+    is_pro: bool
+    quota: QuotaStatus
+
+
 class HealthResponse(BaseModel):
     status: Literal["ok"] = "ok"
     ai: bool

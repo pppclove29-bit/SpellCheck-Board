@@ -23,6 +23,15 @@ android {
             "String", "GOOGLE_WEB_CLIENT_ID",
             stringProp("typeright.googleWebClientId", "").asBuildConfigString(),
         )
+        // AdMob. The defaults are Google's official *test* ids: the app runs and shows test ads without an AdMob
+        // account, but test ads send no SSV callback, so nothing is credited until the real ids are set
+        // (typeright.admobAppId / typeright.admobRewardedUnitId in gradle.properties or -P flags).
+        manifestPlaceholders["admobAppId"] =
+            stringProp("typeright.admobAppId", "ca-app-pub-3940256099942544~3347511713")
+        buildConfigField(
+            "String", "ADMOB_REWARDED_UNIT_ID",
+            stringProp("typeright.admobRewardedUnitId", "ca-app-pub-3940256099942544/5224354917").asBuildConfigString(),
+        )
     }
 
     buildTypes {
@@ -56,6 +65,12 @@ dependencies {
     implementation(libs.androidx.credentials)
     implementation(libs.androidx.credentials.play.services.auth)
     implementation(libs.googleid)
+
+    // Google Play Billing (subscriptions). The server verifies every purchase token before granting PRO.
+    implementation(libs.play.billing)
+
+    // AdMob rewarded ads (host app only — never inside the IME). Rewards are credited by the SSV callback.
+    implementation(libs.play.services.ads)
 
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)

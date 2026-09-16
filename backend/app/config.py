@@ -13,10 +13,6 @@ class QuotaPolicy:
     # without this, a user typing only correct sentences could call the AI for free without limit.
     free_daily_attempts: int = 60
     pro_daily_attempts: int = 1000
-    # AI call attempts per KST day, independent of the 훈수 quota (which only charges when errors are found):
-    # without this, a user typing only correct sentences could call the AI for free without limit.
-    free_daily_attempts: int = 60
-    pro_daily_attempts: int = 1000
 
 
 @dataclass(frozen=True)
@@ -49,6 +45,9 @@ class Settings:
     budget: BudgetPolicy = BudgetPolicy()
     # Slack/Discord-compatible incoming webhook for budget alerts.
     budget_alert_webhook_url: str | None = None
+    # Google Play subscription verification. Without both, purchases can't be verified and PRO is never granted.
+    play_package_name: str | None = None
+    google_service_account_json: str | None = None
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] = os.environ) -> "Settings":
@@ -98,4 +97,6 @@ class Settings:
                 price_output_per_m=number("OPENAI_PRICE_OUTPUT_PER_M", 0.60),
             ),
             budget_alert_webhook_url=env.get("BUDGET_ALERT_WEBHOOK_URL") or None,
+            play_package_name=env.get("PLAY_PACKAGE_NAME") or None,
+            google_service_account_json=env.get("GOOGLE_SERVICE_ACCOUNT_JSON") or None,
         )

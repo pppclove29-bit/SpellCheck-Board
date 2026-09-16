@@ -10,8 +10,11 @@ from app.main import create_app
 from app.services.account import InMemoryAccountDeleter
 from app.services.admob_ssv import AdmobKey
 from app.services.auth import AuthVerifier, InsecureDevAuth, SupabaseJwtVerifier
+from app.services.entitlements import InMemoryEntitlementStore
 from app.services.grammar_service import GrammarService
+from app.services.play_billing import PRODUCT_MONTHLY, DisabledPlayVerifier, PlaySubscription, PlayVerifier
 from app.services.quota import InMemoryQuotaStore
+from app.services.subscription import PlaySubscriptionService
 from app.utils.rule_engine import RuleEngine
 from tests.conftest import POLICY
 
@@ -23,7 +26,10 @@ async def fake_keys(force_refresh: bool = False) -> list[AdmobKey]:
     return [AdmobKey(1234, PUBLIC_PEM)]
 
 
-def make_client(auth: AuthVerifier | None = None) -> tuple[TestClient, InMemoryQuotaStore]:
+def make_client(
+    auth: AuthVerifier | None = None,
+    play: PlayVerifier | None = None,
+) -> tuple[TestClient, InMemoryQuotaStore]:
     quota = InMemoryQuotaStore(POLICY)
     container = Container(
         grammar_service=GrammarService(RuleEngine(), None, quota),
@@ -31,6 +37,7 @@ def make_client(auth: AuthVerifier | None = None) -> tuple[TestClient, InMemoryQ
         account_deleter=InMemoryAccountDeleter(quota),
         auth=auth or InsecureDevAuth(),
         fetch_admob_keys=fake_keys,
+        subscriptions=PlaySubscriptionService(play or DisabledPlayVerifier(), InMemoryEntitlementStore(quota)),
         max_text_length=20,
     )
     return TestClient(create_app(container)), quota
@@ -144,3 +151,54 @@ def test_ssv_rejects_tampering_unknown_keys_and_unsigned_calls() -> None:
 def test_health() -> None:
     client, _ = make_client()
     assert client.get("/health").json() == {"status": "ok", "ai": False}
+
+
+# --- POST /v1/billing/play/verify -----------------------------------------------------------------
+
+
+class _StubPlay:
+    def __init__(self, result: PlaySubscription) -> None:
+        self._result = result
+
+    async def verify(self, product_id: str, purchase_token: str) -> PlaySubscription:
+        return self._result
+
+
+def test_a_verified_play_purchase_turns_on_pro():
+    client, quota = make_client(play=_StubPlay(PlaySubscription("active")))
+
+    res = client.post(
+        "/v1/billing/play/verify",
+        json={"product_id": PRODUCT_MONTHLY, "purchase_token": "tok"},
+        headers={"x-dev-user-id": "u1"},
+    )
+
+    assert res.status_code == 200
+    assert res.json()["result"] == "activated"
+    assert res.json()["is_pro"] is True
+    assert res.json()["quota"]["limit"] == POLICY.pro_daily_limit
+
+
+def test_an_unverifiable_play_purchase_does_not_turn_on_pro():
+    client, _ = make_client(play=_StubPlay(PlaySubscription("not_found")))
+
+    res = client.post(
+        "/v1/billing/play/verify",
+        json={"product_id": PRODUCT_MONTHLY, "purchase_token": "forged"},
+        headers={"x-dev-user-id": "u1"},
+    )
+
+    assert res.json() == {
+        "result": "not_found",
+        "is_pro": False,
+        "quota": res.json()["quota"],
+    }
+    assert res.json()["is_pro"] is False
+
+
+def test_verifying_a_purchase_requires_authentication():
+    client, _ = make_client(play=_StubPlay(PlaySubscription("active")), auth=SupabaseJwtVerifier("https://x.supabase.co", "secret"))
+
+    res = client.post("/v1/billing/play/verify", json={"product_id": PRODUCT_MONTHLY, "purchase_token": "tok"})
+
+    assert res.status_code == 401

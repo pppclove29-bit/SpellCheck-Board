@@ -12,9 +12,13 @@ from app.services.account import AccountDeleter, InMemoryAccountDeleter, Supabas
 from app.services.admob_ssv import CachedAdmobKeyFetcher, KeyFetcher
 from app.services.auth import AuthVerifier, InsecureDevAuth, SupabaseJwtVerifier
 from app.services.budget import BudgetGuard, InMemorySpendStore, SpendStore, SupabaseSpendStore, WebhookAlerter
+from app.services.entitlements import EntitlementStore, InMemoryEntitlementStore, SupabaseEntitlementStore
+from app.services.google_oauth import ServiceAccountError, ServiceAccountKey, ServiceAccountTokenSource
 from app.services.grammar_service import GrammarService
 from app.services.openai_nlp import OpenAiNlpService
+from app.services.play_billing import DisabledPlayVerifier, GooglePlayVerifier, PlayVerifier
 from app.services.quota import InMemoryQuotaStore, QuotaStore, SupabaseQuotaStore
+from app.services.subscription import PlaySubscriptionService
 from app.utils.rule_engine import RuleEngine
 
 log = logging.getLogger("typeright")
@@ -27,6 +31,7 @@ class Container:
     account_deleter: AccountDeleter
     auth: AuthVerifier
     fetch_admob_keys: KeyFetcher
+    subscriptions: PlaySubscriptionService
     max_text_length: int
 
 
@@ -36,14 +41,17 @@ def build_container(settings: Settings) -> Container:
     quota_store: QuotaStore
     account_deleter: AccountDeleter
     spend_store: SpendStore
+    entitlements: EntitlementStore
     if settings.supabase_url and settings.supabase_service_role_key:
         quota_store = SupabaseQuotaStore(http, settings.supabase_url, settings.supabase_service_role_key, settings.quota)
         account_deleter = SupabaseAccountDeleter(http, settings.supabase_url, settings.supabase_service_role_key)
         spend_store = SupabaseSpendStore(http, settings.supabase_url, settings.supabase_service_role_key)
+        entitlements = SupabaseEntitlementStore(http, settings.supabase_url, settings.supabase_service_role_key)
     elif settings.insecure_dev_auth:
         in_memory = InMemoryQuotaStore(settings.quota)
         quota_store, account_deleter = in_memory, InMemoryAccountDeleter(in_memory)
         spend_store = InMemorySpendStore()
+        entitlements = InMemoryEntitlementStore(in_memory)
     else:
         raise RuntimeError("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required (or ALLOW_INSECURE_DEV_AUTH=true for local dev)")
 
@@ -75,8 +83,23 @@ def build_container(settings: Settings) -> Container:
         account_deleter=account_deleter,
         auth=auth,
         fetch_admob_keys=CachedAdmobKeyFetcher(http),
+        subscriptions=PlaySubscriptionService(build_play_verifier(http, settings), entitlements),
         max_text_length=settings.max_text_length,
     )
+
+
+def build_play_verifier(http: httpx.AsyncClient, settings: Settings) -> PlayVerifier:
+    """Real verifier once the package name and service-account key are set; otherwise one that never grants PRO."""
+    if not (settings.play_package_name and settings.google_service_account_json):
+        log.info("Play billing not configured: purchases cannot be verified")
+        return DisabledPlayVerifier()
+    try:
+        key = ServiceAccountKey.from_json(settings.google_service_account_json)
+    except ServiceAccountError as exc:
+        # Never fail boot over billing config: the rest of the API must keep serving.
+        log.error("Play billing disabled: %s", exc)
+        return DisabledPlayVerifier()
+    return GooglePlayVerifier(http, ServiceAccountTokenSource(http, key), settings.play_package_name)
 
 
 def get_container(request: Request) -> Container:

@@ -57,6 +57,31 @@ data class GrammarCheckResponse(
 
 data class MeResponse(val userId: String, val isPro: Boolean, val quota: Quota?, val aiPaused: Boolean = false)
 
+/** Outcome of `POST /v1/billing/play/verify` — what the *server* concluded about the purchase token. */
+enum class PlayVerifyResult(val apiValue: String) {
+    /** PRO is on. */
+    ACTIVATED("activated"),
+
+    /** Google knows the purchase but it no longer entitles PRO (expired, cancelled, refunded). */
+    INACTIVE("inactive"),
+    UNKNOWN_PRODUCT("unknown_product"),
+
+    /** Google has never seen this token: a forged or already-consumed receipt. */
+    NOT_FOUND("not_found"),
+
+    /** That receipt already belongs to a different account. */
+    ALREADY_CLAIMED("already_claimed"),
+
+    /** Play or the key was unreachable — retry later; the user's existing PRO is untouched. */
+    UNAVAILABLE("unavailable");
+
+    companion object {
+        fun fromApi(value: String?): PlayVerifyResult = entries.firstOrNull { it.apiValue == value } ?: UNAVAILABLE
+    }
+}
+
+data class PlayVerifyResponse(val result: PlayVerifyResult, val isPro: Boolean, val quota: Quota?)
+
 sealed interface ApiResult<out T> {
     data class Success<T>(val value: T) : ApiResult<T>
     data class Failure(val kind: Kind, val httpCode: Int? = null, val message: String? = null) : ApiResult<Nothing> {
@@ -90,6 +115,20 @@ class GrammarApiClient(
 
     suspend fun me(): ApiResult<MeResponse> =
         send("GET", "/v1/me", null, CHECK_CONNECT_TIMEOUT_MS, CHECK_READ_TIMEOUT_MS) { parseMe(it) }
+
+    /**
+     * Hands a Play purchase token to the server, which checks it with Google and grants PRO. The client never
+     * decides entitlement, so a patched APK cannot award itself PRO.
+     */
+    suspend fun verifyPlayPurchase(productId: String, purchaseToken: String): ApiResult<PlayVerifyResponse> {
+        val body = buildJsonObject {
+            put("product_id", JsonPrimitive(productId))
+            put("purchase_token", JsonPrimitive(purchaseToken))
+        }.toString()
+        return send("POST", "/v1/billing/play/verify", body, CHECK_CONNECT_TIMEOUT_MS, BILLING_READ_TIMEOUT_MS) {
+            parsePlayVerify(it)
+        }
+    }
 
     /** Account deletion: `DELETE /v1/me` with the bearer token → 204. */
     suspend fun deleteMe(): ApiResult<Unit> =
@@ -194,6 +233,13 @@ class GrammarApiClient(
         return MeResponse(userId, root.bool("is_pro") ?: quota?.isPro ?: false, quota, root.bool("ai_paused") ?: false)
     }
 
+    internal fun parsePlayVerify(body: String): PlayVerifyResponse? {
+        val root = json.parseToJsonElement(body).jsonObject
+        val result = PlayVerifyResult.fromApi(root.str("result") ?: return null)
+        val quota = (root["quota"] as? JsonObject)?.let(::parseQuota)
+        return PlayVerifyResponse(result, root.bool("is_pro") ?: quota?.isPro ?: false, quota)
+    }
+
     private fun parseQuota(o: JsonObject): Quota? {
         val remaining = o.int("remaining") ?: return null
         return Quota(
@@ -215,6 +261,9 @@ class GrammarApiClient(
         const val MAX_TEXT_LENGTH = 1000
         const val CHECK_CONNECT_TIMEOUT_MS = 3_000
         const val CHECK_READ_TIMEOUT_MS = 6_000
+
+        /** Verification waits on Google's Play API, which is slower than a grammar check. */
+        const val BILLING_READ_TIMEOUT_MS = 15_000
         private const val PLATFORM_HEADER = "X-Client-Platform"
     }
 }

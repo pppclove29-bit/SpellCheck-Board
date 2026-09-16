@@ -4,7 +4,14 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse, Response
 
 from app.api.container import Container, get_container
-from app.schemas import GrammarCheckRequest, GrammarCheckResponse, HealthResponse, MeResponse
+from app.schemas import (
+    GrammarCheckRequest,
+    GrammarCheckResponse,
+    HealthResponse,
+    MeResponse,
+    PlayVerifyRequest,
+    PlayVerifyResponse,
+)
 from app.services.admob_ssv import verify_admob_ssv
 from app.utils.errors import HttpError
 
@@ -23,6 +30,8 @@ async def grammar_check(body: GrammarCheckRequest, request: Request, c: Containe
 @router.get("/v1/me", response_model=MeResponse)
 async def me(request: Request, c: Container = Depends(get_container)) -> MeResponse:
     user_id = await c.auth.authenticate(request.headers)
+    # Renewals and cancellations are picked up here (no Pub/Sub): only re-asks Google once PRO has lapsed.
+    await c.subscriptions.refresh(user_id)
     quota = await c.quota_store.get_status(user_id)
     return MeResponse(user_id=user_id, is_pro=quota.is_pro, quota=quota, ai_paused=await c.grammar_service.ai_paused())
 
@@ -33,6 +42,19 @@ async def delete_me(request: Request, c: Container = Depends(get_container)) -> 
     user_id = await c.auth.authenticate(request.headers)
     await c.account_deleter.delete(user_id)
     return Response(status_code=204)
+
+
+@router.post("/v1/billing/play/verify", response_model=PlayVerifyResponse)
+async def verify_play_purchase(
+    body: PlayVerifyRequest,
+    request: Request,
+    c: Container = Depends(get_container),
+) -> PlayVerifyResponse:
+    """Called by the app after a Play purchase. The purchase token — not the client — decides who gets PRO."""
+    user_id = await c.auth.authenticate(request.headers)
+    result = await c.subscriptions.verify_purchase(user_id, body.product_id, body.purchase_token)
+    quota = await c.quota_store.get_status(user_id)
+    return PlayVerifyResponse(result=result, is_pro=quota.is_pro, quota=quota)
 
 
 @router.get("/v1/ads/admob-ssv")
