@@ -1,4 +1,6 @@
 # OS / IDE
+# .claude/settings.json is shared (project permissions); settings.local.json is personal and machine-specific.
+.claude/settings.local.json
 .DS_Store
 .idea/
 .vscode/

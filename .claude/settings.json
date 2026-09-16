@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node run-sql.mjs)",
+      "Bash(./gradlew :keyboard:compileDebugKotlin :app:compileDebugKotlin --console=plain)",
+      "Bash(python3 -c ' *)",
+      "Bash(break)",
+      "Bash(./gradlew :keyboard:testDebugUnitTest :app:assembleDebug --console=plain)",
+      "Bash(./gradlew :keyboard:testDebugUnitTest --console=plain)",
+      "Bash(.venv/bin/python scripts/sync_rules.py)"
+    ]
+  }
+}

@@ -140,6 +140,37 @@ Response `200`
 
 계정 삭제 (Google Play 계정 삭제 정책). Supabase auth 사용자를 삭제하면 쿼터·광고 원장·PRO·단축어가 모두 연쇄 삭제된다. 성공 `204` (이미 없는 계정도 `204`). 활성 구독은 해지되지 않으므로 앱이 "Play 스토어에서 구독을 따로 해지해야 한다"고 안내한다. 클라이언트는 성공 후 세션과 로컬 사용자 데이터를 지운다.
 
+## POST /v1/billing/play/verify
+
+Google Play 구독 결제 직후 클라이언트가 호출한다. **클라이언트가 보낸 값이 아니라 Google이 답한 내용으로** PRO를 부여하므로,
+변조된 APK가 스스로 PRO를 켤 수 없다.
+
+```jsonc
+// 요청 (Authorization: Bearer <supabase jwt>)
+{ "product_id": "typeright_pro_monthly", "purchase_token": "<Play가 준 토큰>" }
+
+// 응답 200
+{ "result": "activated", "is_pro": true, "quota": { "is_pro": true, "limit": 300, "used": 0, "bonus": 0, "remaining": 300 } }
+```
+
+| `result` | 뜻 | 클라이언트 동작 |
+|---|---|---|
+| `activated` | Google이 활성 구독으로 확인 → PRO 켜짐 | `/v1/me` 재조회 |
+| `inactive` | 만료·해지·환불된 구독 | PRO 해제 안내 |
+| `unknown_product` | 우리가 파는 상품이 아님 | 오류 표시 |
+| `not_found` | Google이 모르는 토큰 (위조·소멸) | 오류 표시 |
+| `already_claimed` | 그 영수증이 다른 계정에 묶여 있음 | 해당 계정으로 로그인 안내 |
+| `unavailable` | Play API/서비스 계정 키 문제 | **결제는 유효**. 잠시 후 '구매 복원' 재시도 안내 |
+
+서버 동작:
+- `purchases.subscriptionsv2.get`으로 토큰을 조회하고, 상태가 `ACTIVE` 또는 `IN_GRACE_PERIOD`일 때만 PRO를 준다.
+- 미확인(unacknowledged) 구매는 즉시 acknowledge한다 (3일 내 미확인 시 Google이 자동 환불).
+- 구매 토큰을 `entitlements`에 저장한다. 한 토큰은 한 계정에만 묶인다(영수증 공유 차단).
+- **갱신·해지는 Pub/Sub 없이** `/v1/me`에서 따라잡는다: 저장된 만료 시각이 지났을 때만 Google에 다시 묻는다.
+  → 갱신되면 다음 앱 실행에 PRO 복구, 해지되면 같은 시점에 free로 내려간다.
+
+`PLAY_PACKAGE_NAME`/`GOOGLE_SERVICE_ACCOUNT_JSON`이 없으면 검증기는 항상 `unavailable`을 반환한다(PRO는 절대 부여되지 않음).
+
 ## GET /v1/ads/admob-ssv
 
 AdMob 보상형 광고 **서버 측 확인(SSV) 콜백** 전용 (클라이언트가 직접 호출하지 않음).
@@ -152,13 +183,17 @@ AdMob 보상형 광고 **서버 측 확인(SSV) 콜백** 전용 (클라이언트
 
 `200 { "status": "ok", "ai": true|false }`
 
-## 온디바이스 규칙 (shared/korean-rules.json, version 2)
+## 온디바이스 규칙 (shared/korean-rules.json, version 3)
 
-서버 `backend/src/utils`와 Android/iOS 키보드가 **동일한 규칙 파일**을 사용한다.
+서버 `backend/src/utils`와 Android/iOS 키보드가 **동일한 규칙 파일**을 사용한다. 현재 사전 193개 + 패턴 11개.
+
+문맥에 따라 맞고 틀림이 갈리는 표현(찌개/찌게, 낳다/낫다 등)은 **확실한 연어만** 규칙으로 넣는다. 예를 들어 `찌게`는
+`살이 찌게 되다`가 올바른 문장이라 단독으로 규칙화하지 않고 `김치찌게`·`된장찌게` 같은 합성어만 등록한다.
+`shared/rule-golden-cases.json`의 `clean_cases`(올바른 문장 → 교정 0건)가 이 경계를 3 플랫폼에서 함께 검증한다.
 
 ```json
 {
-  "version": 2,
+  "version": 3,
   "feedback_templates": { "spicy_wit": "...{original}...{suggested}...", "police": "...", "gentle": "...{reason}" },
   "dictionary": [ { "from": "몇일", "to": "며칠", "reason": "...", "wit": "(선택) 매운맛 전용 멘트" } ],
   "patterns":   [ { "id": "ㄹ게", "pattern": "(할|갈)께", "replacement": "$1게", "reason": "...", "wit": "(선택)" } ]

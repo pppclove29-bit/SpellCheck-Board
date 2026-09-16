@@ -324,3 +324,81 @@ API: `POST /v1/grammar-check`, `GET /v1/me`, `GET /v1/ads/admob-ssv`(AdMob 전�
 - 매운맛 멘트 검수 ([wit-review.md](wit-review.md)의 '수정안' 칸)
 - (추가 요청) Google Cloud OAuth 클라이언트(Web + Android) 생성 — 구글 로그인에 필요, Play 앱 서명 SHA-1 등록 포함
 - (추가 요청) Play Console '데이터 보안' 양식: 수집 항목(입력 텍스트·이메일), 전송 여부, 삭제 요청 방법(앱 내 계정 삭제) 기재
+
+---
+
+## 12. 코드로 끝낼 수 있는 잔여 작업 일괄 진행 (2026-09-16)
+
+기획자 요청: "코드로 할 수 있는 건 먼저 진행하고, 사람이 해야 할 것만 따로 모아 달라."
+→ 사람 전용 항목은 [human-todo.md](human-todo.md)로 분리(계정·결제·법무·실기기·감수 27건).
+
+### 12.1 키보드 기본기 (리텐션 벽)
+11.1에서 "가장 큰 벽은 기능이 아니라 키보드 교체 장벽"이라고 적어 놓고, 정작 매일 쓰는 키보드의 기본 요구사항이
+비어 있었다. 이번에 채운 것:
+
+| 항목 | 내용 |
+|---|---|
+| 이모지 패널 | 8개 카테고리 + 최근 사용 24개(MRU, DataStore 영속). 하단 바에 `가/A`·`⌫`(연타 반복)을 둬서 패널을 벗어나지 않고 오타 수정 가능. 키 그리드와 같은 높이(216dp)라 열고 닫을 때 키보드가 튀지 않음 |
+| 이모지 범위 | **minSdk 26(Android 8) = Emoji 5.0까지만 렌더**되므로 그 이후 추가분은 제외. Emoji 11.0+ 코드포인트가 섞이면 실패하는 테스트로 고정(🥳·🥵·🧂·🧩이 이 테스트에 걸려 교체됨) |
+| 이모지 진입 | 하단 행 전용 😊 키(스페이스바 weight 4→3). 천지인은 4열이라 `.,?!` 키 롱프레스 |
+| 키 진동/소리 | 진동은 원래 항상 켜져 있었고 **끌 수가 없었음** → 설정 토글 추가(기본 켬). 키 소리는 신규(기본 끔, 시스템 '터치 사운드'가 꺼져 있으면 켜도 안 남) |
+| 숫자 롱프레스 | 상단 자·모/알파벳 행 롱프레스로 1~0. **주의: 롱프레스가 붙은 키는 터치다운이 아니라 릴리즈에 입력된다**(기존 최저지연 경로에서 벗어남). 주류 키보드와 같은 동작이지만 타자감 확인 시 이 부분을 같이 봐야 함 |
+
+### 12.2 수익 경로 — 스텁 → 실제 구현
+`StubSubscriptionRepository`/`StubRewardedAdProvider` 둘 다 `isAvailable = false`라 **결제도 광고 충전도 동작하지
+않는 상태**였다.
+
+**구독 (Play Billing 8.0.0 + 서버 영수증 검증)**
+- `POST /v1/billing/play/verify`: 클라이언트가 보낸 구매 토큰을 `purchases.subscriptionsv2.get`으로 Google에 확인하고,
+  `ACTIVE`/`IN_GRACE_PERIOD`일 때만 `entitlements`에 PRO를 넣는다. 변조 APK가 스스로 PRO를 켤 수 없다.
+- 미확인 구매는 즉시 acknowledge (3일 내 미확인 시 Google 자동 환불 → 유저가 돈 내고 구독을 잃는 사고 방지).
+  acknowledge 실패해도 PRO는 준다(돈 낸 사람을 막지 않음).
+- 구매 토큰을 저장하고 **유니크 인덱스**로 한 계정에만 묶는다 → 영수증 공유 차단(`already_claimed`).
+- **갱신·해지는 Pub/Sub(RTDN) 없이** `/v1/me`에서 따라잡는다: 저장된 만료 시각이 지났을 때만 Google에 다시 묻는다.
+  갱신되면 다음 앱 실행에 PRO 복구, 해지되면 같은 시점에 free. RTDN 설정(Pub/Sub 토픽·권한)을 기획자 To-Do에서 덜어냄.
+- Play가 응답하지 않으면 `unavailable` → **기존 PRO를 건드리지 않는다**(Play 장애로 결제한 유저의 PRO를 끄면 안 됨).
+- 서비스 계정 JWT → OAuth 토큰 교환은 google-auth 의존성 없이 PyJWT로 직접 구현(스코프 1개, 엔드포인트 1개).
+
+**광고 (AdMob SDK)**
+- `ServerSideVerificationOptions.userId = Supabase user id`. 적립은 기존 SSV 콜백(서명 검증 + transaction_id 멱등)이 하므로
+  클라이언트는 여전히 스스로 충전할 수 없다.
+- 기본 광고 ID를 **Google 공식 테스트 ID**로 두어 AdMob 계정 없이도 앱이 뜨고 광고 화면까지 확인 가능.
+  단 테스트 광고는 SSV 콜백을 보내지 않으므로 실제 충전은 실제 ID 필요(human-todo A5).
+
+### 12.3 교정 품질 — 사전 130 → 193
+실사용 빈도가 높은데 빠져 있던 오타를 63개 추가(`-예요`, 폭팔, 치뤘, 만듬, 촛점, 떡볶기, 육계장, 곱빼기, `-쟁이`,
+`-컨대`, 귀띔, 무릅쓰다, 안절부절못하다 등).
+
+**오탐 원칙을 명시적으로 고정했다.** 문맥에 따라 맞고 틀림이 갈리는 표현은 확실한 연어만 규칙화한다:
+- `찌게` 단독 금지 — "살이 **찌게** 되다"가 올바른 문장이다 → `김치찌게`·`된장찌게` 등 합성어만 등록
+- `낳으` 단독 금지 — "아이를 **낳으**세요"가 올바른 문장이다 → `빨리 낳으`·`감기 낳`·`병이 낳` 연어만 등록
+- `치루`는 의학 용어(痔瘻)와 충돌 → `치뤄`·`치뤘`·`치룬`·`치룰` 활용형만 등록
+
+이 경계를 지키는지 검사하기 위해 골든 파일에 **`clean_cases`(올바른 문장 → 교정 0건)** 섹션을 신설하고
+backend·Android 양쪽 테스트에 연결했다. 규칙을 넓히다 오탐이 생기면 3 플랫폼에서 동시에 실패한다.
+
+### 12.4 검증
+- backend: pytest **182개** 통과 (128 → +54: Play 검증 24, 라우트 3, 오탐 방지 15, 골든 12)
+- Android: 단위 테스트 **160개** 통과 (145 → +15: 이모지 카탈로그·MRU), 디버그 APK 빌드 성공
+- 규칙 동기화: `shared/korean-rules.json` (version 3) → `backend/app/data/`
+
+### 12.5 계측 (기획자 결정: Firebase Analytics)
+중단/피벗 기준을 세워 놓고 측정 수단이 0줄이던 문제를 해결했다.
+
+- 이벤트 카탈로그를 **keyboard 모듈에 Firebase 의존 없이** 정의(`analytics/Analytics.kt`). 호스트 앱이
+  `TypeRightApplication`에서 sink를 주입하고, IME는 `services.analytics`로만 보고한다. 같은 프로세스라 키보드 단독
+  실행에서도 동작한다.
+- 수집 이벤트 16종: `keyboard_shown`(기본 키보드 유지율의 단위), `ime_status`, `rules_found`, `ai_checked`,
+  `correction_applied`, `correction_ignored`, `feedback_shown`, `mode_changed`, `quota_exhausted`,
+  `process_text_opened`, `share_card_created/shared`, `reward_ad_watched`, `purchase_started/verified`, `signed_in`.
+  사용자 속성 3종(plan / signed_in / feedback_mode)으로 리텐션을 세그먼트별로 쪼갠다.
+- **입력 텍스트는 절대 보내지 않는다.** 교정 단어도, 타이핑 중인 앱의 패키지명도 보내지 않는다(앱은
+  messenger/social/work/browser/other 5개 버킷으로만). 파라미터는 숫자·enum·불리언뿐이며,
+  `AnalyticsEventTest`의 "no event carries free text"가 허용 문자열 화이트리스트로 이를 강제한다.
+  키보드 앱에서 이 선이 무너지면 제품 전체가 끝나므로 테스트로 못 박았다.
+- `correction_ignored`가 늘면 = 규칙 오탐이 늘었다는 뜻. 12.3의 `clean_cases`와 짝을 이루는 사후 지표다.
+- `google-services.json`이 없으면 Gradle 플러그인 자체를 적용하지 않아 **빌드가 깨지지 않고**, sink는
+  `Analytics.None`으로 떨어진다. 사람이 파일 하나만 넣으면 그 순간부터 수집이 시작된다(human-todo A9).
+
+### 12.6 아직 안 한 것 (기획자 판단: 보류)
+- 클립보드 패널, 한글 예측·자동완성 — 실기기 타자감을 먼저 보고 무엇이 실제로 부족한지 확인 후 결정.
