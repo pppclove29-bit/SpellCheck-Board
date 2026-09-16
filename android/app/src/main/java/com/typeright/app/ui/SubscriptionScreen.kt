@@ -31,6 +31,7 @@ import com.typeright.app.billing.PurchaseResult
 import com.typeright.app.billing.SubscriptionRepository
 import com.typeright.keyboard.TypeRightServices
 import com.typeright.keyboard.account.AccountState
+import com.typeright.keyboard.analytics.Events
 import kotlinx.coroutines.launch
 
 /** PRO subscription: Google Play Billing, with the purchase token verified server-side before PRO turns on. */
@@ -92,8 +93,11 @@ fun SubscriptionScreen(
                             val act = activity ?: return@Button
                             scope.launch {
                                 busy = true
+                                services.analytics.log(Events.purchaseStarted(plan.id))
                                 try {
-                                    handle(billing.purchase(act, plan))
+                                    val result = billing.purchase(act, plan)
+                                    services.analytics.log(Events.purchaseVerified(plan.id, result.metricName))
+                                    handle(result)
                                 } finally {
                                     busy = false
                                 }

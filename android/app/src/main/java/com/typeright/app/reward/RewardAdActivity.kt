@@ -38,6 +38,7 @@ import com.typeright.app.ui.theme.TypeRightTheme
 import com.typeright.keyboard.TypeRightServices
 import com.typeright.keyboard.account.AccountState
 import com.typeright.keyboard.account.RewardCreditPoller
+import com.typeright.keyboard.analytics.Events
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -99,6 +100,7 @@ private fun RewardAdPopup(
                         initialBonus = bonusBefore,
                         fetchQuota = { if (services.account.refresh()) services.account.current().quota else null },
                     )
+                    services.analytics.log(Events.rewardAdWatched(credited = credited != null))
                     ui = RewardUi.Done(
                         if (credited != null) {
                             "훈수 3회 충전 완료! 오늘 남은 횟수 ${credited.remaining}회"

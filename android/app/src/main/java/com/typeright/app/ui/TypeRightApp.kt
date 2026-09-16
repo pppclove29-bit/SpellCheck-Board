@@ -16,7 +16,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.typeright.app.ime.ImeStatus
 import com.typeright.keyboard.TypeRightServices
+import com.typeright.keyboard.analytics.Events
+import com.typeright.keyboard.analytics.UserProperty
 import com.typeright.keyboard.account.AccountState
 import com.typeright.keyboard.auth.AuthState
 import com.typeright.keyboard.settings.TypeRightSettings
@@ -52,6 +55,20 @@ fun TypeRightApp(requestedTab: AppTab?, onRequestedTabConsumed: () -> Unit, focu
             services.account.refresh()
             services.shortcutSync.sync(services.account.current().isPro)
         }
+    }
+
+    // The metric that decides continue/pivot: is TypeRight actually somebody's keyboard? Re-read on every
+    // return to the app (focusTick), since the user may have just switched it in system settings.
+    LaunchedEffect(focusTick) {
+        val status = ImeStatus.read(context)
+        services.analytics.log(Events.imeStatus(enabled = status.enabled, isDefault = status.selected))
+    }
+
+    // Segments for retention, so PRO/free and signed-in/out can be compared without joining on a user id.
+    LaunchedEffect(account.isPro, authState.isSignedIn, settings.feedbackMode) {
+        services.analytics.setUserProperty(UserProperty.PLAN, if (account.isPro) "pro" else "free")
+        services.analytics.setUserProperty(UserProperty.SIGNED_IN, authState.isSignedIn.toString())
+        services.analytics.setUserProperty(UserProperty.FEEDBACK_MODE, settings.feedbackMode.apiValue)
     }
 
     Scaffold(

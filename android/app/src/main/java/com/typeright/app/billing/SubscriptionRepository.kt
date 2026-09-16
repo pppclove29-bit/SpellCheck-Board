@@ -28,6 +28,18 @@ sealed interface PurchaseResult {
     /** Nothing to restore (no active subscription on this Google account). */
     data object NothingToRestore : PurchaseResult
     data class Failed(val message: String) : PurchaseResult
+
+    /** Stable key for analytics. Never the failure message — that can contain arbitrary text from Play. */
+    val metricName: String
+        get() = when (this) {
+            Purchased -> "purchased"
+            Cancelled -> "cancelled"
+            NotAvailable -> "not_available"
+            PendingVerification -> "pending_verification"
+            AwaitingPayment -> "awaiting_payment"
+            NothingToRestore -> "nothing_to_restore"
+            is Failed -> "failed"
+        }
 }
 
 /** Subscription billing. [PlayBillingRepository] is the real implementation; the stub is the fallback. */

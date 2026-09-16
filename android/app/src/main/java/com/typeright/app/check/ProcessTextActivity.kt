@@ -51,6 +51,7 @@ import androidx.compose.ui.window.Dialog
 import com.typeright.app.share.ShareCardActivity
 import com.typeright.app.ui.theme.TypeRightTheme
 import com.typeright.keyboard.TypeRightServices
+import com.typeright.keyboard.analytics.Events
 import com.typeright.keyboard.api.AiStatus
 import com.typeright.keyboard.api.ApiResult
 import com.typeright.keyboard.check.AiCallPolicy
@@ -122,6 +123,7 @@ private fun ProcessTextDialog(
     var ignored by remember(ui.corrections) { mutableStateOf(emptySet<Int>()) }
 
     LaunchedEffect(text) {
+        services.analytics.log(Events.processTextOpened())
         val settings = services.settings.settings.first()
         val mode = settings.modeFor(callerPackage)
         val engine = withContext(Dispatchers.IO) { runCatching { services.ruleEngine }.getOrNull() }

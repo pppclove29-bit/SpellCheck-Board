@@ -51,6 +51,8 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import com.typeright.app.ui.theme.TypeRightTheme
+import com.typeright.keyboard.TypeRightServices
+import com.typeright.keyboard.analytics.Events
 import com.typeright.keyboard.share.ShareCardRequest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -76,16 +78,22 @@ class ShareCardActivity : ComponentActivity() {
 @Composable
 private fun ShareCardDialog(request: ShareCardRequest, onClose: () -> Unit) {
     val context = LocalContext.current
+    val analytics = remember(context) { TypeRightServices.get(context).analytics }
     val scope = rememberCoroutineScope()
     var bitmap by remember { mutableStateOf<Bitmap?>(null) }
     var message by remember { mutableStateOf<String?>(null) }
 
-    LaunchedEffect(request) { bitmap = withContext(Dispatchers.Default) { ShareCardRenderer.render(request) } }
+    LaunchedEffect(request) {
+        bitmap = withContext(Dispatchers.Default) { ShareCardRenderer.render(request) }
+        analytics.log(Events.shareCardCreated(request.mode.apiValue))
+    }
 
     fun save() {
         val bmp = bitmap ?: return
         scope.launch {
-            message = if (ShareCardStorage.saveToGallery(context, bmp)) "갤러리(사진/TypeRight)에 저장했어요 📸" else "저장하지 못했어요."
+            val saved = ShareCardStorage.saveToGallery(context, bmp)
+            if (saved) analytics.log(Events.shareCardShared("gallery"))
+            message = if (saved) "갤러리(사진/TypeRight)에 저장했어요 📸" else "저장하지 못했어요."
         }
     }
 
@@ -114,6 +122,7 @@ private fun ShareCardDialog(request: ShareCardRequest, onClose: () -> Unit) {
                 .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             send.clipData = ClipData.newRawUri("TypeRight", uri)
             runCatching { context.startActivity(Intent.createChooser(send, "짤 공유하기")) }
+                .onSuccess { analytics.log(Events.shareCardShared("share_sheet")) }
                 .onFailure { message = "공유할 앱을 찾지 못했어요." }
         }
     }

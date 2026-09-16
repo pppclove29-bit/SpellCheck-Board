@@ -18,6 +18,7 @@ import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.android.libraries.identity.googleid.GoogleIdTokenParsingException
 import com.typeright.app.BuildConfig
 import com.typeright.keyboard.TypeRightServices
+import com.typeright.keyboard.analytics.Events
 import com.typeright.keyboard.auth.Nonce
 import com.typeright.keyboard.auth.SignInResult
 import kotlinx.coroutines.CoroutineScope
@@ -101,6 +102,7 @@ class GoogleSignInState internal constructor(
         scope.launch {
             message = when (val r = GoogleSignIn.signIn(act, services)) {
                 is GoogleSignInOutcome.SignedIn -> {
+                    services.analytics.log(Events.signedIn())
                     // Cache PRO/quota and pull the user's synced shortcuts (restored for any signed-in user).
                     services.account.refresh()
                     val sync = services.shortcutSync.sync(services.account.current().isPro)

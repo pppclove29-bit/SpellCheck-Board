@@ -3,6 +3,16 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
+/**
+ * Firebase is configured by app/google-services.json, which is not in the repo (it carries project-specific ids).
+ * The plugin hard-fails the build when that file is missing, so it is applied only when the file is there: the app
+ * builds without Firebase and [com.typeright.app.analytics.AnalyticsFactory] falls back to a no-op sink.
+ */
+val firebaseConfigured = file("google-services.json").exists()
+if (firebaseConfigured) {
+    apply(plugin = libs.plugins.google.services.get().pluginId)
+}
+
 fun stringProp(name: String, default: String): String =
     (project.findProperty(name) as String?)?.takeIf { it.isNotBlank() } ?: default
 
@@ -71,6 +81,10 @@ dependencies {
 
     // AdMob rewarded ads (host app only — never inside the IME). Rewards are credited by the SSV callback.
     implementation(libs.play.services.ads)
+
+    // Firebase Analytics — retention / default-keyboard metrics. Inert until google-services.json is added.
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.analytics)
 
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)

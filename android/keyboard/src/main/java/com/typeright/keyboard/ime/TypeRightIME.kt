@@ -30,6 +30,8 @@ import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.typeright.keyboard.TypeRightServices
 import com.typeright.keyboard.account.AccountState
+import com.typeright.keyboard.analytics.AppCategories
+import com.typeright.keyboard.analytics.Events
 import com.typeright.keyboard.api.AiStatus
 import com.typeright.keyboard.api.ApiResult
 import com.typeright.keyboard.check.AiCallPolicy
@@ -199,6 +201,8 @@ class TypeRightIME :
             // Cache /v1/me (PRO + quota) on keyboard start; not an AI call, no text is sent.
             lifecycleScope.launch { services.account.refreshIfStale() }
         }
+        // Coarse category only — which apps someone types in is not ours to collect.
+        services.analytics.log(Events.keyboardShown(AppCategories.of(currentPackage)))
         refreshBar()
     }
 
@@ -576,6 +580,7 @@ class TypeRightIME :
                             remoteResult = requestSnapshot to r.suggestions
                             showCorrections(requestSnapshot, r.suggestions, feedbackOverride = r.witFeedback)
                         }
+                        services.analytics.log(Events.aiChecked(r.aiStatus.apiValue))
                         if (r.aiStatus == AiStatus.PAUSED) {
                             // Monthly AI budget paused: show the notice once, then on-device only until /v1/me
                             // reports ai_paused == false (re-checked at keyboard start, at most hourly).
@@ -655,9 +660,14 @@ class TypeRightIME :
 
     override fun onChipClick(chip: ChipUi) {
         when (chip) {
-            is ChipUi.CorrectionChip -> applyCorrection(chip)
+            is ChipUi.CorrectionChip -> {
+                services.analytics.log(Events.correctionApplied(chip.correction.source.apiValue))
+                applyCorrection(chip)
+            }
             is ChipUi.IgnoreChip -> {
                 // 무시: police off for the whole current sentence (no blocking, no siren); chips stay.
+                // A rising count here means the rules are producing false positives.
+                services.analytics.log(Events.correctionIgnored())
                 policeGate.ignoreSentence(chip.snapshot.absStart)
                 if (ui.feedback?.style == FeedbackStyle.POLICE) ui.feedback = null
                 refreshBar()
@@ -690,6 +700,7 @@ class TypeRightIME :
         lifecycleScope.launch {
             if (pkg.isNullOrEmpty()) services.settings.setFeedbackMode(next) else services.settings.setAppModeOverride(pkg, next)
         }
+        services.analytics.log(Events.modeChanged(next.apiValue, perApp = !pkg.isNullOrEmpty()))
         val policeHint = if (!signedIn) " · 경찰 모드는 로그인 후" else ""
         showFeedback(FeedbackStyle.NOTICE, "${FeedbackModeResolver.emoji(next)} 이 앱에서는 ${next.label} 모드$policeHint")
     }

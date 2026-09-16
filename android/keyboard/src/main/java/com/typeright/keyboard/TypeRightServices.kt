@@ -2,6 +2,7 @@ package com.typeright.keyboard
 
 import android.content.Context
 import com.typeright.keyboard.account.AccountRepository
+import com.typeright.keyboard.analytics.Analytics
 import com.typeright.keyboard.api.ApiResult
 import com.typeright.keyboard.api.GrammarApiClient
 import com.typeright.keyboard.api.UrlConnectionTransport
@@ -21,6 +22,13 @@ class TypeRightServices private constructor(context: Context) {
     private val app = context.applicationContext
 
     val settings: SettingsRepository = SettingsRepository.get(app)
+
+    /**
+     * Product metrics. Installed once by the host app's Application (the keyboard module must not depend on
+     * Firebase); until then, and whenever Firebase is not configured, this stays a no-op.
+     */
+    @Volatile
+    var analytics: Analytics = Analytics.None
 
     val auth: AuthSessionManager = AuthSessionManager(
         supabaseUrl = BuildConfig.SUPABASE_URL,
