@@ -29,6 +29,12 @@ def test_golden_cases(case: dict) -> None:
     assert wire(case["text"]) == case["expected"]
 
 
+@pytest.mark.parametrize("text", GOLDEN["clean_cases"], ids=GOLDEN["clean_cases"])
+def test_correct_sentences_are_left_alone(text: str) -> None:
+    """False-positive guard: a rule that fires on valid Korean is worse than a missed typo."""
+    assert engine.check(text) == []
+
+
 @pytest.mark.parametrize("case", GOLDEN["feedback_cases"], ids=[f"{c['mode']}:{c['text']}" for c in GOLDEN["feedback_cases"]])
 def test_golden_feedback(case: dict) -> None:
     assert compose_rule_feedback(engine.check(case["text"]), case["mode"], engine.templates) == case["expected"]

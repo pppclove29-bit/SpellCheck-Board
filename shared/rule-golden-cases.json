@@ -1,60 +1,497 @@
 {
-  "description": "온디바이스 규칙 엔진·피드백 크로스플랫폼 골든 테스트. backend/Android/iOS 모두 이 파일로 테스트하며 결과가 완전히 일치해야 한다. offset/length는 UTF-16 code unit.",
+  "description": "온디바이스 규칙 엔진·피드백 크로스플랫폼 골든 테스트. backend/Android/iOS 모두 이 파일로 테스트하며 결과가 완전히 일치해야 한다. offset/length는 UTF-16 code unit. clean_cases는 이미 올바른 문장이라 아무 교정도 나오면 안 되는 오탐 방지 코퍼스.",
   "cases": [
-    { "text": "오늘 몇일이야?", "expected": [{ "offset": 3, "length": 2, "original_word": "몇일", "suggested_word": "며칠" }] },
-    { "text": "내일 갈께 기다려", "expected": [{ "offset": 3, "length": 2, "original_word": "갈께", "suggested_word": "갈게" }] },
-    { "text": "그거 내꺼야", "expected": [{ "offset": 3, "length": 2, "original_word": "내꺼", "suggested_word": "내 거" }] },
-    { "text": "나도 할수있어", "expected": [{ "offset": 3, "length": 3, "original_word": "할수있", "suggested_word": "할 수 있" }] },
-    { "text": "그럴수도 있지", "expected": [{ "offset": 0, "length": 4, "original_word": "그럴수도", "suggested_word": "그럴 수도" }] },
-    { "text": "오늘 안해", "expected": [{ "offset": 3, "length": 2, "original_word": "안해", "suggested_word": "안 해" }] },
-    { "text": "안하무인이다", "expected": [] },
-    { "text": "갈수록 좋아", "expected": [] },
-    { "text": "부모님께 드릴께요", "expected": [{ "offset": 6, "length": 2, "original_word": "릴께", "suggested_word": "릴게" }] },
-    { "text": "않되요", "expected": [{ "offset": 0, "length": 3, "original_word": "않되요", "suggested_word": "안 돼요" }] },
-    { "text": "몇 일 뒤에 봬요", "expected": [{ "offset": 0, "length": 3, "original_word": "몇 일", "suggested_word": "며칠" }] },
+    {
+      "text": "오늘 몇일이야?",
+      "expected": [
+        {
+          "offset": 3,
+          "length": 2,
+          "original_word": "몇일",
+          "suggested_word": "며칠"
+        }
+      ]
+    },
+    {
+      "text": "내일 갈께 기다려",
+      "expected": [
+        {
+          "offset": 3,
+          "length": 2,
+          "original_word": "갈께",
+          "suggested_word": "갈게"
+        }
+      ]
+    },
+    {
+      "text": "그거 내꺼야",
+      "expected": [
+        {
+          "offset": 3,
+          "length": 2,
+          "original_word": "내꺼",
+          "suggested_word": "내 거"
+        }
+      ]
+    },
+    {
+      "text": "나도 할수있어",
+      "expected": [
+        {
+          "offset": 3,
+          "length": 3,
+          "original_word": "할수있",
+          "suggested_word": "할 수 있"
+        }
+      ]
+    },
+    {
+      "text": "그럴수도 있지",
+      "expected": [
+        {
+          "offset": 0,
+          "length": 4,
+          "original_word": "그럴수도",
+          "suggested_word": "그럴 수도"
+        }
+      ]
+    },
+    {
+      "text": "오늘 안해",
+      "expected": [
+        {
+          "offset": 3,
+          "length": 2,
+          "original_word": "안해",
+          "suggested_word": "안 해"
+        }
+      ]
+    },
+    {
+      "text": "안하무인이다",
+      "expected": []
+    },
+    {
+      "text": "갈수록 좋아",
+      "expected": []
+    },
+    {
+      "text": "부모님께 드릴께요",
+      "expected": [
+        {
+          "offset": 6,
+          "length": 2,
+          "original_word": "릴께",
+          "suggested_word": "릴게"
+        }
+      ]
+    },
+    {
+      "text": "않되요",
+      "expected": [
+        {
+          "offset": 0,
+          "length": 3,
+          "original_word": "않되요",
+          "suggested_word": "안 돼요"
+        }
+      ]
+    },
+    {
+      "text": "몇 일 뒤에 봬요",
+      "expected": [
+        {
+          "offset": 0,
+          "length": 3,
+          "original_word": "몇 일",
+          "suggested_word": "며칠"
+        }
+      ]
+    },
     {
       "text": "먹을때 연락할께",
       "expected": [
-        { "offset": 1, "length": 2, "original_word": "을때", "suggested_word": "을 때" },
-        { "offset": 6, "length": 2, "original_word": "할께", "suggested_word": "할게" }
+        {
+          "offset": 1,
+          "length": 2,
+          "original_word": "을때",
+          "suggested_word": "을 때"
+        },
+        {
+          "offset": 6,
+          "length": 2,
+          "original_word": "할께",
+          "suggested_word": "할게"
+        }
       ]
     },
     {
       "text": "정말 금새 됬네",
       "expected": [
-        { "offset": 3, "length": 2, "original_word": "금새", "suggested_word": "금세" },
-        { "offset": 6, "length": 1, "original_word": "됬", "suggested_word": "됐" }
+        {
+          "offset": 3,
+          "length": 2,
+          "original_word": "금새",
+          "suggested_word": "금세"
+        },
+        {
+          "offset": 6,
+          "length": 1,
+          "original_word": "됬",
+          "suggested_word": "됐"
+        }
       ]
     },
-    { "text": "구지 그럴 필요 없어", "expected": [{ "offset": 0, "length": 2, "original_word": "구지", "suggested_word": "굳이" }] },
-    { "text": "안좋은 일", "expected": [{ "offset": 0, "length": 2, "original_word": "안좋", "suggested_word": "안 좋" }] },
-    { "text": "오늘 진짜 어의가 없네", "expected": [{ "offset": 6, "length": 2, "original_word": "어의", "suggested_word": "어이" }] },
-    { "text": "어의없다", "expected": [{ "offset": 0, "length": 2, "original_word": "어의", "suggested_word": "어이" }] },
-    { "text": "궁궐 어의가 왔다", "expected": [] },
-    { "text": "하늘을 날으는 비행기", "expected": [{ "offset": 4, "length": 3, "original_word": "날으는", "suggested_word": "나는" }] },
-    { "text": "방 있슴", "expected": [{ "offset": 2, "length": 2, "original_word": "있슴", "suggested_word": "있음" }] },
-    { "text": "그래도 되?", "expected": [{ "offset": 4, "length": 1, "original_word": "되", "suggested_word": "돼" }] },
-    { "text": "그래도 되", "expected": [] },
-    { "text": "학교에 않 갈거니?", "expected": [{ "offset": 4, "length": 1, "original_word": "않", "suggested_word": "안" }] },
-    { "text": "먹지 않아", "expected": [] },
-    { "text": "자유투 성공율이 80%이다", "expected": [{ "offset": 4, "length": 3, "original_word": "성공율", "suggested_word": "성공률" }] },
-    { "text": "그는 멋적은 표정", "expected": [{ "offset": 3, "length": 2, "original_word": "멋적", "suggested_word": "멋쩍" }] },
-    { "text": "얼굴 가득 미소를 띄고", "expected": [{ "offset": 6, "length": 5, "original_word": "미소를 띄", "suggested_word": "미소를 띠" }] },
-    { "text": "😀 몇일 남았어?", "expected": [{ "offset": 3, "length": 2, "original_word": "몇일", "suggested_word": "며칠" }] },
-    { "text": "맞춤법이 정확합니다.", "expected": [] }
+    {
+      "text": "구지 그럴 필요 없어",
+      "expected": [
+        {
+          "offset": 0,
+          "length": 2,
+          "original_word": "구지",
+          "suggested_word": "굳이"
+        }
+      ]
+    },
+    {
+      "text": "안좋은 일",
+      "expected": [
+        {
+          "offset": 0,
+          "length": 2,
+          "original_word": "안좋",
+          "suggested_word": "안 좋"
+        }
+      ]
+    },
+    {
+      "text": "오늘 진짜 어의가 없네",
+      "expected": [
+        {
+          "offset": 6,
+          "length": 2,
+          "original_word": "어의",
+          "suggested_word": "어이"
+        }
+      ]
+    },
+    {
+      "text": "어의없다",
+      "expected": [
+        {
+          "offset": 0,
+          "length": 2,
+          "original_word": "어의",
+          "suggested_word": "어이"
+        }
+      ]
+    },
+    {
+      "text": "궁궐 어의가 왔다",
+      "expected": []
+    },
+    {
+      "text": "하늘을 날으는 비행기",
+      "expected": [
+        {
+          "offset": 4,
+          "length": 3,
+          "original_word": "날으는",
+          "suggested_word": "나는"
+        }
+      ]
+    },
+    {
+      "text": "방 있슴",
+      "expected": [
+        {
+          "offset": 2,
+          "length": 2,
+          "original_word": "있슴",
+          "suggested_word": "있음"
+        }
+      ]
+    },
+    {
+      "text": "그래도 되?",
+      "expected": [
+        {
+          "offset": 4,
+          "length": 1,
+          "original_word": "되",
+          "suggested_word": "돼"
+        }
+      ]
+    },
+    {
+      "text": "그래도 되",
+      "expected": []
+    },
+    {
+      "text": "학교에 않 갈거니?",
+      "expected": [
+        {
+          "offset": 4,
+          "length": 1,
+          "original_word": "않",
+          "suggested_word": "안"
+        }
+      ]
+    },
+    {
+      "text": "먹지 않아",
+      "expected": []
+    },
+    {
+      "text": "자유투 성공율이 80%이다",
+      "expected": [
+        {
+          "offset": 4,
+          "length": 3,
+          "original_word": "성공율",
+          "suggested_word": "성공률"
+        }
+      ]
+    },
+    {
+      "text": "그는 멋적은 표정",
+      "expected": [
+        {
+          "offset": 3,
+          "length": 2,
+          "original_word": "멋적",
+          "suggested_word": "멋쩍"
+        }
+      ]
+    },
+    {
+      "text": "얼굴 가득 미소를 띄고",
+      "expected": [
+        {
+          "offset": 6,
+          "length": 5,
+          "original_word": "미소를 띄",
+          "suggested_word": "미소를 띠"
+        }
+      ]
+    },
+    {
+      "text": "😀 몇일 남았어?",
+      "expected": [
+        {
+          "offset": 3,
+          "length": 2,
+          "original_word": "몇일",
+          "suggested_word": "며칠"
+        }
+      ]
+    },
+    {
+      "text": "맞춤법이 정확합니다.",
+      "expected": []
+    },
+    {
+      "text": "이거 뭐에요?",
+      "expected": [
+        {
+          "offset": 3,
+          "length": 3,
+          "original_word": "뭐에요",
+          "suggested_word": "뭐예요"
+        }
+      ]
+    },
+    {
+      "text": "점심은 김치찌게 어때",
+      "expected": [
+        {
+          "offset": 4,
+          "length": 4,
+          "original_word": "김치찌게",
+          "suggested_word": "김치찌개"
+        }
+      ]
+    },
+    {
+      "text": "떡볶기 먹으러 갈래",
+      "expected": [
+        {
+          "offset": 0,
+          "length": 3,
+          "original_word": "떡볶기",
+          "suggested_word": "떡볶이"
+        }
+      ]
+    },
+    {
+      "text": "시험 잘 치뤘어?",
+      "expected": [
+        {
+          "offset": 5,
+          "length": 2,
+          "original_word": "치뤘",
+          "suggested_word": "치렀"
+        }
+      ]
+    },
+    {
+      "text": "감기 빨리 낳으세요",
+      "expected": [
+        {
+          "offset": 3,
+          "length": 5,
+          "original_word": "빨리 낳으",
+          "suggested_word": "빨리 나으"
+        }
+      ]
+    },
+    {
+      "text": "머리가 폭팔할 것 같아",
+      "expected": [
+        {
+          "offset": 4,
+          "length": 2,
+          "original_word": "폭팔",
+          "suggested_word": "폭발"
+        }
+      ]
+    },
+    {
+      "text": "안절부절 못하고 서 있었다",
+      "expected": [
+        {
+          "offset": 0,
+          "length": 6,
+          "original_word": "안절부절 못",
+          "suggested_word": "안절부절못"
+        }
+      ]
+    },
+    {
+      "text": "단언컨데 이게 최고야",
+      "expected": [
+        {
+          "offset": 0,
+          "length": 4,
+          "original_word": "단언컨데",
+          "suggested_word": "단언컨대"
+        }
+      ]
+    },
+    {
+      "text": "그건 통채로 삼켰어",
+      "expected": [
+        {
+          "offset": 3,
+          "length": 2,
+          "original_word": "통채",
+          "suggested_word": "통째"
+        }
+      ]
+    },
+    {
+      "text": "위험을 무릎쓰고 갔다",
+      "expected": [
+        {
+          "offset": 4,
+          "length": 3,
+          "original_word": "무릎쓰",
+          "suggested_word": "무릅쓰"
+        }
+      ]
+    },
+    {
+      "text": "육계장 한 그릇 주세요",
+      "expected": [
+        {
+          "offset": 0,
+          "length": 3,
+          "original_word": "육계장",
+          "suggested_word": "육개장"
+        }
+      ]
+    },
+    {
+      "text": "숨겨둔 사실이 들어났다",
+      "expected": [
+        {
+          "offset": 8,
+          "length": 3,
+          "original_word": "들어났",
+          "suggested_word": "드러났"
+        }
+      ]
+    }
   ],
   "feedback_cases": [
-    { "text": "오늘 진짜 어의가 없네", "mode": "spicy_wit", "expected": "어의는 조선시대 궁궐 의사입니다. '어처구니'가 없으신 거죠? 🩺" },
-    { "text": "오늘 진짜 어의가 없네", "mode": "police", "expected": "🚨 맞춤법 위반 적발! '어의' → '어이' 교정 전까지 통과 불가!" },
-    { "text": "오늘 진짜 어의가 없네", "mode": "gentle", "expected": "✏️ '어의' → '어이' : '어이없다'가 올바른 표기입니다." },
-    { "text": "몇개 샀어", "mode": "spicy_wit", "expected": "'몇개'? 맞춤법 검사기가 조용히 웃고 있어요. 정답은 '몇 개' 😏" },
-    { "text": "정말 금새 됬네", "mode": "spicy_wit", "expected": "'금새'는 물건 값이에요. 순식간이라는 뜻이면 '금세'! 💨" },
-    { "text": "맞춤법이 정확합니다.", "mode": "police", "expected": null }
+    {
+      "text": "오늘 진짜 어의가 없네",
+      "mode": "spicy_wit",
+      "expected": "어의는 조선시대 궁궐 의사입니다. '어처구니'가 없으신 거죠? 🩺"
+    },
+    {
+      "text": "오늘 진짜 어의가 없네",
+      "mode": "police",
+      "expected": "🚨 맞춤법 위반 적발! '어의' → '어이' 교정 전까지 통과 불가!"
+    },
+    {
+      "text": "오늘 진짜 어의가 없네",
+      "mode": "gentle",
+      "expected": "✏️ '어의' → '어이' : '어이없다'가 올바른 표기입니다."
+    },
+    {
+      "text": "몇개 샀어",
+      "mode": "spicy_wit",
+      "expected": "'몇개'? 맞춤법 검사기가 조용히 웃고 있어요. 정답은 '몇 개' 😏"
+    },
+    {
+      "text": "정말 금새 됬네",
+      "mode": "spicy_wit",
+      "expected": "'금새'는 물건 값이에요. 순식간이라는 뜻이면 '금세'! 💨"
+    },
+    {
+      "text": "맞춤법이 정확합니다.",
+      "mode": "police",
+      "expected": null
+    }
   ],
   "type_cases": [
-    { "original_word": "할수있", "suggested_word": "할 수 있", "type": "spacing" },
-    { "original_word": "몇 일", "suggested_word": "며칠", "type": "spelling" },
-    { "original_word": "않되요", "suggested_word": "안 돼요", "type": "spelling" },
-    { "original_word": "것같", "suggested_word": "것 같", "type": "spacing" }
+    {
+      "original_word": "할수있",
+      "suggested_word": "할 수 있",
+      "type": "spacing"
+    },
+    {
+      "original_word": "몇 일",
+      "suggested_word": "며칠",
+      "type": "spelling"
+    },
+    {
+      "original_word": "않되요",
+      "suggested_word": "안 돼요",
+      "type": "spelling"
+    },
+    {
+      "original_word": "것같",
+      "suggested_word": "것 같",
+      "type": "spacing"
+    }
+  ],
+  "clean_cases": [
+    "살이 찌게 될까 봐 걱정이야",
+    "아이를 낳으신 걸 축하드려요",
+    "어제 아이를 낳았대",
+    "무릎이 아파서 병원에 갔어",
+    "김치찌개가 맛있다",
+    "떡볶이 먹으러 가자",
+    "안절부절못하는 표정이었다",
+    "책상이 널찍해서 좋다",
+    "발자국 소리가 들렸다",
+    "이건 우리 집 거예요",
+    "치루 수술은 항문외과에서 해",
+    "통에 담아서 왔어",
+    "그 사람은 멋쟁이야",
+    "대물림된 가게를 지켰다",
+    "오늘 날씨가 좋네요"
   ]
 }

@@ -46,6 +46,18 @@ class RuleEngineGoldenTest {
         assertTrue(failures.joinToString("\n"), failures.isEmpty())
     }
 
+    /** False-positive guard: a rule that fires on valid Korean is worse than a missed typo. */
+    @Test
+    fun correctSentencesAreLeftAlone() {
+        val cases = golden.getValue("clean_cases").jsonArray.map { it.jsonPrimitive.content }
+        assertTrue("golden file has clean_cases", cases.isNotEmpty())
+        val failures = cases.mapNotNull { text ->
+            val found = engine.check(text).map { it.originalWord to it.suggestedWord }
+            if (found.isEmpty()) null else "\"$text\" → $found"
+        }
+        assertTrue("false positives:\n" + failures.joinToString("\n"), failures.isEmpty())
+    }
+
     @Test
     fun feedbackCasesMatchExactly() {
         val cases = golden["feedback_cases"]?.jsonArray.orEmpty()
