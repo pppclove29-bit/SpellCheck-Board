@@ -175,6 +175,38 @@ fun SettingsScreen(
         }
 
         SectionCard {
+            Text("키 입력 반응", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("키 진동", style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        "키를 누를 때 짧게 진동해요.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(
+                    checked = settings.keyVibration,
+                    onCheckedChange = { on -> scope.launch { services.settings.setKeyVibration(on) } },
+                )
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("키 소리", style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        "휴대폰 설정의 '터치 사운드'가 꺼져 있으면 이 스위치를 켜도 소리가 나지 않아요.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(
+                    checked = settings.keySound,
+                    onCheckedChange = { on -> scope.launch { services.settings.setKeySound(on) } },
+                )
+            }
+        }
+
+        SectionCard {
             Text("한국어 자판", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             Text(
                 "키보드의 한/영 키를 길게 눌러도 바꿀 수 있어요.",

@@ -28,6 +28,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.typeright.keyboard.ime.ImeActions
+import com.typeright.keyboard.ime.KeyFeedback
 import com.typeright.keyboard.ime.ShiftState
 import com.typeright.keyboard.ime.layout.KeyAction
 import com.typeright.keyboard.ime.layout.KeyKind
@@ -52,6 +53,7 @@ fun KeyboardView(
     shift: ShiftState,
     enterLabel: String,
     lettersLabel: String,
+    feedback: KeyFeedback,
     actions: ImeActions,
 ) {
     val layout = KeyboardLayouts.get(layoutId)
@@ -73,6 +75,7 @@ fun KeyboardView(
                             spec = spec,
                             label = label,
                             highlighted = spec.action == KeyAction.Shift && shift != ShiftState.OFF,
+                            feedback = feedback,
                             actions = actions,
                             modifier = Modifier.weight(spec.weight),
                         )
@@ -88,6 +91,7 @@ private fun Key(
     spec: KeySpec,
     label: String,
     highlighted: Boolean,
+    feedback: KeyFeedback,
     actions: ImeActions,
     modifier: Modifier,
 ) {
@@ -113,11 +117,12 @@ private fun Key(
                     cornerRadius = CornerRadius(7.dp.toPx()),
                 )
             }
-            .pointerInput(spec) {
+            .pointerInput(spec, feedback) {
                 awaitEachGesture {
                     awaitFirstDown(requireUnconsumed = false)
                     pressed.value = true
-                    view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                    if (feedback.vibrate) view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                    playKeySound(view, feedback, spec.action)
                     when {
                         spec.longPress != null -> {
                             // Tap on release, long-press action after LONG_PRESS_MS.

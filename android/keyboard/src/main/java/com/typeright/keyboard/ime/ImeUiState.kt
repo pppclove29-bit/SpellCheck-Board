@@ -13,6 +13,13 @@ import com.typeright.keyboard.settings.Shortcut
 
 enum class ShiftState { OFF, ONCE, LOCKED }
 
+/** What fills the area below the suggestion bar: the key grid, or the emoji panel. */
+enum class KeyboardPanel { KEYS, EMOJI }
+
+/** Per-key press feedback, mirrored from settings so the key grid can read it without a settings lookup. */
+@Immutable
+data class KeyFeedback(val vibrate: Boolean = true, val sound: Boolean = false)
+
 enum class BarStatus(val label: String) {
     NONE(""),
     CHECKING("AI 검사 중"),
@@ -73,6 +80,9 @@ data class FeedbackUi(
  */
 class ImeUiState {
     var layout by mutableStateOf(LayoutId.DUBEOLSIK)
+    var panel by mutableStateOf(KeyboardPanel.KEYS)
+    var keyFeedback by mutableStateOf(KeyFeedback())
+    var recentEmoji by mutableStateOf<List<String>>(emptyList())
     var shift by mutableStateOf(ShiftState.OFF)
     var secure by mutableStateOf(false)
     var enterLabel by mutableStateOf("↵")
@@ -96,4 +106,10 @@ interface ImeActions {
 
     /** 📸 on a feedback bubble: open the share-card screen for that feedback. */
     fun onShareFeedback(id: Long) {}
+
+    /** Emoji panel: commit one emoji (the panel stays open for multi-emoji runs). */
+    fun onEmojiPick(emoji: String) {}
+
+    /** Emoji panel: 가/A — back to the key grid. */
+    fun onEmojiPanelClose() {}
 }

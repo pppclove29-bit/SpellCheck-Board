@@ -28,6 +28,9 @@ sealed interface KeyAction {
     data object SwitchKoreanLayout : KeyAction
     data object Symbols : KeyAction
     data object Letters : KeyAction
+
+    /** Opens the emoji panel in place of the key grid. */
+    data object ShowEmoji : KeyAction
 }
 
 enum class KeyKind { CHAR, FUNCTION, ACCENT, SPACE, SPACER }
@@ -70,6 +73,18 @@ object KeyboardLayouts {
         shiftAction = KeyAction.Text(c.uppercaseChar().toString()),
     )
 
+    /**
+     * Top-row digits on long-press, as on every mainstream Korean keyboard: typing one number should not cost a
+     * trip through ?123 and back. The digit is shown as the key's hint so it is discoverable.
+     */
+    private fun withDigit(keys: List<KeySpec>): List<KeySpec> =
+        keys.mapIndexed { index, spec ->
+            val digit = DIGIT_ROW[index % DIGIT_ROW.length].toString()
+            spec.copy(longPress = KeyAction.Text(digit), hint = digit)
+        }
+
+    private const val DIGIT_ROW = "1234567890"
+
     private fun text(s: String, weight: Float = 1f) = KeySpec(s, KeyAction.Text(s), weight)
 
     private fun spacer(weight: Float) = KeySpec("", null, weight, kind = KeyKind.SPACER)
@@ -83,15 +98,19 @@ object KeyboardLayouts {
     )
     private val space = KeySpec("스페이스", KeyAction.Space, 4f, kind = KeyKind.SPACE)
     private val enter = KeySpec("↵", KeyAction.Enter, 1.5f, kind = KeyKind.ACCENT)
+    private val emoji = KeySpec("😊", KeyAction.ShowEmoji, 1f, kind = KeyKind.FUNCTION)
 
-    private val bottomRow = listOf(symbols, language, text(","), space, text("."), enter)
+    // Same total weight as before the emoji key existed (10f); the space bar gives up the width.
+    private val bottomRow = listOf(symbols, language, emoji, text(","), space.copy(weight = 3f), text("."), enter)
 
     val DUBEOLSIK = KeyboardLayout(
         LayoutId.DUBEOLSIK,
         listOf(
-            listOf(
-                jamo('ㅂ', 'ㅃ'), jamo('ㅈ', 'ㅉ'), jamo('ㄷ', 'ㄸ'), jamo('ㄱ', 'ㄲ'), jamo('ㅅ', 'ㅆ'),
-                jamo('ㅛ'), jamo('ㅕ'), jamo('ㅑ'), jamo('ㅐ', 'ㅒ'), jamo('ㅔ', 'ㅖ'),
+            withDigit(
+                listOf(
+                    jamo('ㅂ', 'ㅃ'), jamo('ㅈ', 'ㅉ'), jamo('ㄷ', 'ㄸ'), jamo('ㄱ', 'ㄲ'), jamo('ㅅ', 'ㅆ'),
+                    jamo('ㅛ'), jamo('ㅕ'), jamo('ㅑ'), jamo('ㅐ', 'ㅒ'), jamo('ㅔ', 'ㅖ'),
+                ),
             ),
             listOf(spacer(0.5f)) + "ㅁㄴㅇㄹㅎㅗㅓㅏㅣ".map { jamo(it) } + spacer(0.5f),
             listOf(shift) + "ㅋㅌㅊㅍㅠㅜㅡ".map { jamo(it) } + backspace,
@@ -102,7 +121,7 @@ object KeyboardLayouts {
     val QWERTY = KeyboardLayout(
         LayoutId.QWERTY,
         listOf(
-            "qwertyuiop".map(::letter),
+            withDigit("qwertyuiop".map(::letter)),
             listOf(spacer(0.5f)) + "asdfghjkl".map(::letter) + spacer(0.5f),
             listOf(shift) + "zxcvbnm".map(::letter) + backspace,
             bottomRow,
@@ -117,9 +136,10 @@ object KeyboardLayouts {
             listOf("=", "\"", "'", ":", ";", "!", "?", "/").map { text(it) } + backspace,
             listOf(
                 KeySpec("가/A", KeyAction.Letters, 1.3f, kind = KeyKind.FUNCTION),
-                text("~", 1.2f),
+                emoji,
+                text("~"),
                 text(","),
-                space,
+                space.copy(weight = 3f),
                 text("."),
                 enter,
             ),
@@ -145,7 +165,10 @@ object KeyboardLayouts {
                 enter.copy(weight = 1f),
             ),
             listOf(
-                KeySpec(".,?!", KeyAction.CjPunctuation),
+                KeySpec(
+                    ".,?!", KeyAction.CjPunctuation,
+                    longPress = KeyAction.ShowEmoji, hint = "길게: 😊",
+                ),
                 cj(CheonjiinConsonantKey.IEUNG),
                 space.copy(label = "␣", weight = 1f),
                 language.copy(weight = 1f),

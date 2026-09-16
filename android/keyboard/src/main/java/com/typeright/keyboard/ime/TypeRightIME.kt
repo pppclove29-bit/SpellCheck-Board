@@ -192,6 +192,7 @@ class TypeRightIME :
         lastFeedbackKey = null
         ui.shift = ShiftState.OFF
         ui.feedback = null
+        ui.panel = KeyboardPanel.KEYS
         setLayout(initialLayout(info))
         resetCheckState()
         if (!ui.secure && signedIn) {
@@ -251,6 +252,8 @@ class TypeRightIME :
     private fun onSettingsChanged(new: TypeRightSettings) {
         val old = settings
         settings = new
+        ui.keyFeedback = KeyFeedback(vibrate = new.keyVibration, sound = new.keySound)
+        ui.recentEmoji = new.recentEmoji
         if (old.koreanLayout != new.koreanLayout && ui.layout.isKorean()) {
             finishComposing()
             setLayout(koreanLayoutId())
@@ -362,6 +365,11 @@ class TypeRightIME :
                 setLayout(LayoutId.SYMBOLS)
             }
             KeyAction.Letters -> setLayout(layoutBeforeSymbols)
+            KeyAction.ShowEmoji -> {
+                finishComposing()
+                ui.shift = ShiftState.OFF
+                ui.panel = KeyboardPanel.EMOJI
+            }
         }
     }
 
@@ -687,6 +695,15 @@ class TypeRightIME :
     }
 
     /** 📸 → host app's ShareCardActivity with the checked sentence, its first correction and the 훈수 line. */
+    override fun onEmojiPick(emoji: String) {
+        commitChars(emoji)
+        lifecycleScope.launch { services.settings.pushRecentEmoji(emoji) }
+    }
+
+    override fun onEmojiPanelClose() {
+        ui.panel = KeyboardPanel.KEYS
+    }
+
     override fun onShareFeedback(id: Long) {
         val f = ui.feedback?.takeIf { it.id == id && it.shareable } ?: return
         val snap = snapshot ?: return

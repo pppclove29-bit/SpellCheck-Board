@@ -26,6 +26,12 @@ data class TypeRightSettings(
     val appAutoMode: Boolean = true,
     /** Modes the user picked for specific apps via the keyboard's mode chip (package name → mode). */
     val appModeOverrides: Map<String, FeedbackMode> = emptyMap(),
+    /** Haptic pulse on each key press. On by default (what the keyboard did before the toggle existed). */
+    val keyVibration: Boolean = true,
+    /** Click sound on each key press. Off by default; the system's own key-click setting still wins. */
+    val keySound: Boolean = false,
+    /** 최근 tab of the emoji panel, most recent first. */
+    val recentEmoji: List<String> = emptyList(),
 ) {
     /** Feedback mode for the app being typed in ([packageName] from EditorInfo / the PROCESS_TEXT caller). */
     fun modeFor(packageName: String?): FeedbackMode =

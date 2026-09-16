@@ -12,6 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.typeright.keyboard.ime.ImeActions
 import com.typeright.keyboard.ime.ImeUiState
+import com.typeright.keyboard.ime.KeyboardPanel
 
 /** Fixed height of the suggestion bar slot: always reserved, even when empty, so the keyboard never jumps. */
 val SuggestionBarHeight = 48.dp
@@ -39,13 +40,18 @@ fun KeyboardScreen(state: ImeUiState, actions: ImeActions) {
                     onShare = actions::onShareFeedback,
                 )
             }
-            KeyboardView(
-                layoutId = state.layout,
-                shift = state.shift,
-                enterLabel = state.enterLabel,
-                lettersLabel = state.lettersLabel,
-                actions = actions,
-            )
+            if (state.panel == KeyboardPanel.EMOJI) {
+                EmojiPanel(recent = state.recentEmoji, feedback = state.keyFeedback, actions = actions)
+            } else {
+                KeyboardView(
+                    layoutId = state.layout,
+                    shift = state.shift,
+                    enterLabel = state.enterLabel,
+                    lettersLabel = state.lettersLabel,
+                    feedback = state.keyFeedback,
+                    actions = actions,
+                )
+            }
         }
     }
 }

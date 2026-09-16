@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.typeright.keyboard.emoji.RecentEmoji
 import com.typeright.keyboard.rules.FeedbackMode
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -36,6 +37,9 @@ class SettingsRepository private constructor(private val dataStore: DataStore<Pr
                     ?: KeyboardLanguage.KOREAN,
                 appAutoMode = p[Keys.APP_AUTO_MODE] ?: true,
                 appModeOverrides = AppModeCodec.decode(p[Keys.APP_MODE_OVERRIDES]),
+                keyVibration = p[Keys.KEY_VIBRATION] ?: true,
+                keySound = p[Keys.KEY_SOUND] ?: false,
+                recentEmoji = RecentEmoji.decode(p[Keys.RECENT_EMOJI]),
             )
         }
         .distinctUntilChanged()
@@ -82,6 +86,21 @@ class SettingsRepository private constructor(private val dataStore: DataStore<Pr
 
     suspend fun clearAppModeOverrides() {
         dataStore.edit { it.remove(Keys.APP_MODE_OVERRIDES) }
+    }
+
+    suspend fun setKeyVibration(enabled: Boolean) {
+        dataStore.edit { it[Keys.KEY_VIBRATION] = enabled }
+    }
+
+    suspend fun setKeySound(enabled: Boolean) {
+        dataStore.edit { it[Keys.KEY_SOUND] = enabled }
+    }
+
+    /** Records an emoji pick at the front of the 최근 tab. */
+    suspend fun pushRecentEmoji(emoji: String) {
+        dataStore.edit { p ->
+            p[Keys.RECENT_EMOJI] = RecentEmoji.encode(RecentEmoji.push(RecentEmoji.decode(p[Keys.RECENT_EMOJI]), emoji))
+        }
     }
 
     suspend fun setKoreanLayout(layout: KoreanLayout) {
@@ -170,6 +189,9 @@ class SettingsRepository private constructor(private val dataStore: DataStore<Pr
         val LAST_LANGUAGE = stringPreferencesKey("last_language")
         val APP_AUTO_MODE = booleanPreferencesKey("app_auto_mode")
         val APP_MODE_OVERRIDES = stringPreferencesKey("app_mode_overrides")
+        val KEY_VIBRATION = booleanPreferencesKey("key_vibration")
+        val KEY_SOUND = booleanPreferencesKey("key_sound")
+        val RECENT_EMOJI = stringPreferencesKey("recent_emoji")
     }
 
     companion object {
