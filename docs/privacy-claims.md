@@ -47,9 +47,11 @@
 | 저장공간 쓰기는 Android 9 이하에서 짤 카드 저장에만 쓴다 | `AndroidManifest.xml`: `WRITE_EXTERNAL_STORAGE` + `maxSdkVersion="28"` | 권한을 추가하면 방침에 적어야 한다 |
 | 연락처·위치·카메라·마이크에 접근하지 않는다 | 매니페스트에 해당 권한 없음 | 같은 위 |
 
-## 공개 전 순서
+## 공개 상태
 
-1. **B1-1** — `site/privacy/index.html`의 문의 이메일 자리표시를 실제 주소로 교체
-2. **B1-2** — 그 다음에 GitHub Pages 공개 설정 (Settings → Pages → Source: GitHub Actions)
+1. **B1-1 ✅** — 문의 이메일을 `musikga1116@gmail.com`으로 교체 완료 (2026-09-21, 세 앱 공용).
+   Play 스토어 등록정보의 개발자 연락처도 **같은 주소**를 쓴다 — 방침과 다르면 심사에서 지적된다.
+2. **B1-2 ⬜** — GitHub Pages 공개 설정 (Settings → Pages → Source: **GitHub Actions**). 지금 바로 가능하다.
 
-자리표시가 들어간 채로 공개되면 안 된다. 코드가 push돼 있어도 2번을 하기 전까지 사이트는 뜨지 않는다.
+공개되면 방침 주소는 `https://pppclove29-bit.github.io/SpellCheck-Board/privacy/` 다.
+이 주소를 Play '앱 콘텐츠'의 개인정보처리방침 URL로 넣는다.
