@@ -56,6 +56,7 @@ import com.typeright.keyboard.rules.Correction
 import com.typeright.keyboard.rules.FeedbackMode
 import com.typeright.keyboard.rules.RuleEngine
 import com.typeright.keyboard.secure.SecureFieldDetector
+import com.typeright.keyboard.secure.TextAccessPolicy
 import com.typeright.keyboard.settings.KeyboardLanguage
 import com.typeright.keyboard.settings.KoreanLayout
 import com.typeright.keyboard.settings.Shortcut
@@ -492,7 +493,13 @@ class TypeRightIME :
         policeGate.reset()
     }
 
+    /**
+     * 입력한 텍스트를 읽는 **유일한 경로**. 보안 입력란이면 아무것도 읽지 않는다
+     * ([TextAccessPolicy] — 방침의 "비밀번호 입력란에서는 검사 자체를 하지 않는다"가 여기에 걸려 있다).
+     * 텍스트가 필요한 새 기능은 반드시 이 함수를 거쳐야 한다.
+     */
     private fun readWindow(maxChars: Int): EditorWindow? {
+        if (!TextAccessPolicy.mayReadText(ui.secure)) return null
         val ic = currentInputConnection ?: return null
         return EditorText.readBeforeCursor(ic, maxChars, selStart)
     }
@@ -742,7 +749,7 @@ class TypeRightIME :
         ic.beginBatchEdit()
         try {
             finishComposing()
-            val win = EditorText.readBeforeCursor(ic, MAX_LOOKBACK, selStart)
+            val win = readWindow(MAX_LOOKBACK)
             if (win == null || !StaleGuard.isFresh(chip.snapshot, win.text, win.cursorAbs)) {
                 // Text changed since the check: drop the chip and re-check what is there now.
                 snapshot = null

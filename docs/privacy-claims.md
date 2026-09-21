@@ -13,7 +13,7 @@
 |---|---|---|
 | 맞춤법 검사는 기기 안에서만 하고, 입력 문장을 서버로 보내지 않는다 | `FeatureFlags.ai == false` → `TypeRightIME.maybeRequestAi()`가 즉시 반환, `ProcessTextActivity`도 규칙 결과에서 끝낸다. 규칙은 assets의 `korean-rules.json` | **AI를 되살리면(cloud 플레이버) 이 문장이 거짓이 된다.** 그때는 방침에 전송 조항을 되살려야 한다 |
 | 입력한 문장을 저장하지 않는다 | 검사 결과는 `TypeRightIME`의 메모리 상태(`snapshot`, `corrections`)로만 존재. 영속 저장 경로 없음 | 입력 이력·예측 학습 같은 기능을 추가하면 깨진다 |
-| 비밀번호 입력란과 개인화 학습 거부 입력란에서는 **검사 자체를 하지 않는다** | `TypeRightIME.runLocalCheck()` 첫 줄 `if (ui.secure) return` — 규칙 엔진이 텍스트를 읽지도 않는다. 판정은 `SecureFieldDetector` | `runLocalCheck`의 가드를 빼거나 `SecureFieldDetector`의 범위를 좁히면 깨진다 |
+| 비밀번호 입력란과 개인화 학습 거부 입력란에서는 **검사 자체를 하지 않는다** | 입력 텍스트를 읽는 경로가 `TypeRightIME.readWindow()` **하나뿐**이고, 그 첫 줄이 `TextAccessPolicy.mayReadText(ui.secure)` 를 거친다. 판정은 `SecureFieldDetector` | 관문을 빼거나, `readWindow` 를 거치지 않는 **두 번째 읽기 경로**를 만들면 깨진다. 둘 다 `TextAccessPolicyTest` 가 잡는다 |
 | 클립보드를 읽지 않는다 (쓰기만) | 저장소 전체에 `setPrimaryClip`만 있고 `getPrimaryClip`은 없다 | **클립보드 패널**(12.6에서 보류 중)을 만들면 바로 깨진다 |
 
 ## 2. 계정
@@ -75,8 +75,11 @@
 | 계정·로그인이 없고 문장을 서버로 안 보낸다 | `ai`/`auth`/`shortcutSync` 가 `cloud` 와 일치 |
 | (방침 페이지 자체) | 자리표시·TODO 없음, 문의 이메일 존재, 앱의 URL 상수가 `/privacy/` 로 끝남 |
 
+| 보안 입력란에서는 검사 자체를 안 함 | 읽기 경로가 `readWindow` 하나뿐 + 그 경로가 관문을 거침 (`TextAccessPolicyTest`) |
+
 **테스트로 덮지 못한 것** (사람이 봐야 한다):
-- "보안 입력란에서는 검사 자체를 하지 않는다" — `TypeRightIME.runLocalCheck()` 의 조기 반환은
-  IME 서비스 동작이라 JVM 단위 테스트로 재현하기 어렵다. `SecureFieldDetector` 의 판정 로직만 테스트돼 있다.
 - "입력한 문장을 저장하지 않는다" — 저장 경로가 *없음*을 증명하는 것이라 기계 검사가 어렵다.
+  새 저장소를 만들면 리뷰에서 걸러야 한다.
 - Firebase 가 자동 수집하는 항목 — 우리 코드가 아니라 SDK 동작이라 우리 테스트로 고정할 수 없다.
+- `SecureFieldDetector` 가 **실제 앱에서** 보안 입력란을 빠짐없이 잡는지 — 판정 로직은 테스트돼 있지만,
+  특정 앱이 비표준 `inputType` 을 쓰면 놓칠 수 있다. 실기기 확인 항목이다(D14).
