@@ -828,3 +828,30 @@ Firebase 가 자동 수집하는 항목(우리 코드가 아니다).
 | `:keyboard` | 177 | 177 |
 | `:app` | 11 | 11 |
 | **합계** | **376개 통과 / 실패 0** | |
+
+## 20. 서명된 AAB 검증 (2026-09-21)
+
+업로드 키스토어가 생겨(`~/keys/typeright-upload.jks`, 별칭 `typeright`) 실제로 서명된 번들을 만들어 확인했다.
+**비밀번호는 이 저장소 어디에도 적지 않는다** — `android/keystore.properties`(권한 600, git 제외)에만 있다.
+
+| 항목 | 결과 |
+|---|---|
+| `jarsigner -verify` | **jar verified** |
+| 인증서 SHA1 | `93:4E:E2:B9:06:BC:E5:E4:20:C9:A1:C1:D2:19:2C:10:70:A4:64:09` — 발급 시 지문과 **일치** |
+| 소유자 | `CN=typeright, OU=Personal, O=Personal, L=Seoul, ST=Seoul, C=KR` (자체 서명 업로드 키) |
+| 디버그 키 여부 | `CN=Android Debug` **0건** — 디버그 키 아님 |
+| 키/알고리즘 | RSA 2048 / SHA384withRSA |
+| 유효기간 | 2026-09-21 → 2054-02-06 (10000일) |
+| AAB 크기 | **11.20MB** (11,748,586 bytes) |
+| 버전 | `versionCode=1`, `versionName=1.0.0` (병합된 릴리스 매니페스트에서 확인) |
+
+**출시 빌드에 광고·결제가 없다는 것도 산출물에서 재확인**했다: dex 에 `billingclient` 0건,
+`RewardAdActivity` 0건. 남은 `gms/ads/identifier` 5건은 전부 Firebase 의 광고 ID 조회이고
+AdMob 광고 코드가 아니다(수집 자체는 매니페스트에서 꺼 두었다 — 14.7).
+
+만드는 법과 확인 명령은 [human-todo.md](human-todo.md) 0.2-1 절에 남겼다.
+`keystore.properties` 가 없으면 **무서명**으로 빌드되게 해 두었으므로(14.7),
+실수로 디버그 키로 서명된 AAB 가 Play 에 올라가 업로드 키가 굳는 사고는 구조적으로 막혀 있다.
+
+**남은 업로드 전 항목은 전부 Play Console 작업이다**: A11(앱 생성), A9(`google-services.json`),
+B2·B2-1·B3·A12(앱 콘텐츠 선언). 코드 쪽은 더 할 것이 없다.

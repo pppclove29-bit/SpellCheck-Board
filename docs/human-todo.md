@@ -29,12 +29,37 @@ TypeRight가 가장 앞서 있지만 **혼자 먼저 보내지 않는다.**
 |---|---|---|
 | 1 | A1 Play 개발자 계정 | ✅ 2026-09-21 등록 완료 (세 앱 공용) |
 | 2 | A1-1 계정 유형 확인 → **개인 계정** | ✅ 2026-09-21 확인 완료 |
-| 3 | **A10 릴리스 키스토어 생성** | ⬜ **없으면 업로드 자체가 불가.** 코드 쪽은 끝남 |
+| 3 | A10 릴리스 키스토어 | ✅ 2026-09-21 완료. 서명된 AAB 생성·지문 대조까지 확인 |
 | 4 | **A11 Play Console에 앱 생성** (패키지명 `com.typeright.app`) | ⬜ |
 | 5 | B1-1 앱 전용 이메일 → 방침 페이지 교체 | ✅ 2026-09-21 완료 (`musikga1116@gmail.com`) |
 | 6 | B1-2 GitHub Pages 공개 | ✅ 2026-09-21 완료. 방침 URL 200 확인 |
 | 7 | **A9 `google-services.json` 배치** | ⬜ B2보다 **먼저** — 계측 여부에 따라 데이터 보안 답이 달라진다 |
 | 8 | **B2·B2-1 데이터 보안 양식**, **B3 IME 고지**, **A12 콘텐츠 등급·타겟 연령·광고 포함 여부** | ⬜ Play '앱 콘텐츠' 섹션 |
+
+### 0.2-1 서명된 AAB 만들기 · 확인하는 법
+
+```bash
+cd android
+JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" ./gradlew :app:bundleOndeviceRelease
+# 산출물: app/build/outputs/bundle/ondeviceRelease/app-ondevice-release.aab
+```
+
+서명이 **업로드 키로** 됐는지 확인(디버그 키로 서명된 AAB 를 올리면 업로드 키가 그대로 굳는다):
+
+```bash
+JH="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
+AAB=app/build/outputs/bundle/ondeviceRelease/app-ondevice-release.aab
+$JH/bin/jarsigner -verify "$AAB"            # -> jar verified.
+$JH/bin/keytool -printcert -jarfile "$AAB"  # SHA1 이 아래와 같아야 한다
+```
+
+기대 SHA1: `93:4E:E2:B9:06:BC:E5:E4:20:C9:A1:C1:D2:19:2C:10:70:A4:64:09`
+소유자에 `CN=Android Debug` 가 보이면 **잘못된 것이다** — `android/keystore.properties` 가 없는 상태로
+빌드했다는 뜻이다(그때는 무서명으로 나오게 해 뒀지만, 설정이 어긋나면 확인이 필요하다).
+
+**2026-09-21 실측**: 11.20MB, `versionCode=1`, `versionName=1.0.0`,
+dex 에 `billingclient` 0건 · `RewardAdActivity` 0건 (남은 `gms/ads/identifier` 5건은 Firebase 의 광고 ID
+조회이며 AdMob 이 아니다. 수집은 매니페스트에서 꺼 두었다).
 
 ### 0.3 클로즈드 테스트 **중에** 병행해도 되는 것
 
@@ -71,7 +96,7 @@ B4(환불 문구), C2(광고 보상량), D5·D6·D7.
 | A7 | **[나중]** **OpenAI API 키 발급 + 결제 수단 등록 + 사용량 한도 설정** | AI 문맥 교정 전체 불가(규칙 교정만 동작) | 월 예산 가드가 서버에 있지만 OpenAI 쪽에도 hard limit 걸어둘 것 |
 | A8 | **[나중]** **Vercel 계정 + 프로젝트 연결** | 백엔드 배포 불가 | Root Directory `backend`, 리전 `icn1` |
 | A9 | **[이번]** **Firebase 프로젝트 생성 → `google-services.json`을 `android/app/`에 배치** | 계측이 전부 무음(no-op)이라 D7/D30·기본 키보드 유지율을 볼 수 없음 | 파일이 없으면 Gradle 플러그인이 아예 적용되지 않게 해 뒀으므로 **빌드는 정상**. 파일만 넣으면 그 순간부터 수집 시작. 패키지명은 `com.typeright.app` |
-| A10 | **[이번]** **릴리스 업로드 키스토어 생성 + 비밀번호 보관** — `keytool -genkeypair -v -keystore typeright-upload.jks -alias typeright -keyalg RSA -keysize 2048 -validity 10000` 후 `android/keystore.properties` 작성 | **서명 없는 AAB는 Play에 업로드 불가 = 출시 차단** | 코드 쪽은 끝났다([keystore.properties.example](../android/keystore.properties.example) 참고). **`.jks`와 비밀번호는 저장소에 넣지 않는다** — 파일은 저장소 바깥(예: `~/keys/`)에 두고 별도 백업, 비밀번호는 암호 관리자에. **키스토어를 잃으면 같은 앱을 영영 업데이트할 수 없다** |
+| A10 | **[이번 ✅]** **릴리스 업로드 키스토어** | — | **2026-09-21 완료·검증됨.** 파일 `~/keys/typeright-upload.jks`, 별칭 `typeright`, RSA 2048, 유효기간 2026-09-21 → 2054-02-06. `android/keystore.properties` 로 연결(권한 600, git 제외·미추적 확인). **비밀번호는 저장소·문서 어디에도 적지 않는다.**<br>서명 확인: `jarsigner -verify` = *jar verified*, 인증서 SHA1 `93:4E:...:64:09` 이 발급 지문과 일치, `CN=Android Debug` 아님. 검증 명령은 0.2절 아래에 있다.<br>⚠️ **키스토어를 잃으면 같은 앱을 영영 업데이트할 수 없다** — `~/keys/` 백업과 비밀번호 관리자 저장, Play 앱 서명 활성화를 권한다 |
 
 ## B. 법무 · 심사 서류 (사람이 문장을 확정해야 함)
 
@@ -136,7 +161,7 @@ D3·D11~D15(🟢)는 **지금 바로 확인 가능하다.** 여기서 나온 타
 
 목표는 **내부 테스트 트랙 업로드**까지다(0.1절). 1~4는 서로 독립이라 같은 날 다 할 수 있다.
 
-1. **A10 키스토어 생성** — 10분. 없으면 업로드 자체가 불가. `.jks`·비밀번호는 저장소 밖에
+1. ~~A10 키스토어 생성~~ ✅ **2026-09-21 완료** (서명된 AAB 검증까지)
 2. **A11 Play Console 앱 생성** — 패키지명 `com.typeright.app`
 3. ~~B1-1 이메일 → B1-2 Pages 공개~~ ✅ **2026-09-21 완료** (방침 URL 200 검증)
 4. **A9 `google-services.json` 배치** — B2보다 먼저(계측 여부가 데이터 보안 답을 바꾼다)
