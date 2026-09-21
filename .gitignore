@@ -39,3 +39,10 @@ DerivedData/
 .swiftpm/
 *.xcodeproj/
 Pods/
+
+# 계정·서명 비밀 — 절대 커밋 금지 (docs/human-todo.md A9, 릴리스 서명)
+android/app/google-services.json
+google-services.json
+*.jks
+*.keystore
+keystore.properties

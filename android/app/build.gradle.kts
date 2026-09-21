@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -11,6 +13,19 @@ plugins {
 val firebaseConfigured = file("google-services.json").exists()
 if (firebaseConfigured) {
     apply(plugin = libs.plugins.google.services.get().pluginId)
+}
+
+/**
+ * 릴리스 서명 정보. 저장소에 **절대 넣지 않는다** — `android/keystore.properties`(gitignore 됨)에서 읽거나,
+ * CI 에서는 같은 이름의 환경변수로 준다. 파일이 없으면 릴리스 빌드는 **서명 없이** 만들어진다
+ * (디버그 키로 서명하지 않는다 — 그런 AAB 를 Play 에 올리면 업로드 키가 영구히 디버그 키로 굳는다).
+ *
+ * 만드는 법은 docs/human-todo.md 의 릴리스 서명 항목 참고.
+ */
+val keystoreProps: Properties? = rootProject.file("keystore.properties").takeIf(File::exists)?.let { f ->
+    val props = Properties()
+    f.inputStream().use(props::load)
+    props
 }
 
 fun stringProp(name: String, default: String): String =
@@ -33,21 +48,47 @@ android {
             "String", "GOOGLE_WEB_CLIENT_ID",
             stringProp("typeright.googleWebClientId", "").asBuildConfigString(),
         )
-        // AdMob. The defaults are Google's official *test* ids: the app runs and shows test ads without an AdMob
-        // account, but test ads send no SSV callback, so nothing is credited until the real ids are set
-        // (typeright.admobAppId / typeright.admobRewardedUnitId in gradle.properties or -P flags).
-        manifestPlaceholders["admobAppId"] =
-            stringProp("typeright.admobAppId", "ca-app-pub-3940256099942544~3347511713")
-        buildConfigField(
-            "String", "ADMOB_REWARDED_UNIT_ID",
-            stringProp("typeright.admobRewardedUnitId", "ca-app-pub-3940256099942544/5224354917").asBuildConfigString(),
-        )
+    }
+
+    // :keyboard 와 같은 축. ondevice = 출시 형태(AI·로그인·결제·광고 없음), cloud = 전부 되살린 형태.
+    // 소스셋(src/ondevice, src/cloud), 매니페스트, 의존성이 여기서 함께 갈린다.
+    flavorDimensions += "features"
+    productFlavors {
+        create("ondevice") {
+            dimension = "features"
+            isDefault = true
+        }
+        create("cloud") {
+            dimension = "features"
+            // AdMob. 기본값은 Google 공식 *테스트* ID다. 테스트 광고는 SSV 콜백을 보내지 않으므로 실제 ID를 넣기
+            // 전까지 충전은 되지 않는다. ondevice 에는 이 값도, AdMob SDK 도, 매니페스트 항목도 들어가지 않는다.
+            manifestPlaceholders["admobAppId"] =
+                stringProp("typeright.admobAppId", "ca-app-pub-3940256099942544~3347511713")
+            buildConfigField(
+                "String", "ADMOB_REWARDED_UNIT_ID",
+                stringProp("typeright.admobRewardedUnitId", "ca-app-pub-3940256099942544/5224354917")
+                    .asBuildConfigString(),
+            )
+        }
+    }
+
+    signingConfigs {
+        if (keystoreProps != null) {
+            create("release") {
+                storeFile = rootProject.file(keystoreProps.getProperty("storeFile"))
+                storePassword = keystoreProps.getProperty("storePassword")
+                keyAlias = keystoreProps.getProperty("keyAlias")
+                keyPassword = keystoreProps.getProperty("keyPassword")
+            }
+        }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            // keystore.properties 가 없으면 서명 없이 빌드된다 (위 주석 참고).
+            signingConfig = signingConfigs.findByName("release")
         }
     }
 
@@ -76,11 +117,12 @@ dependencies {
     implementation(libs.androidx.credentials.play.services.auth)
     implementation(libs.googleid)
 
+    // 결제·광고는 cloud 플레이버에만 들어간다. 출시 AAB(ondevice)에는 두 SDK 도, AdMob 테스트 앱 ID 도 없다.
     // Google Play Billing (subscriptions). The server verifies every purchase token before granting PRO.
-    implementation(libs.play.billing)
+    "cloudImplementation"(libs.play.billing)
 
     // AdMob rewarded ads (host app only — never inside the IME). Rewards are credited by the SSV callback.
-    implementation(libs.play.services.ads)
+    "cloudImplementation"(libs.play.services.ads)
 
     // Firebase Analytics — retention / default-keyboard metrics. Inert until google-services.json is added.
     implementation(platform(libs.firebase.bom))

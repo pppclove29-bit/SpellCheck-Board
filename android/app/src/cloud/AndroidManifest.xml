@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    cloud 플레이버에만 병합되는 항목. 출시 형태인 ondevice 에는 AdMob 메타데이터도, 보상형 광고 화면도 들어가지
+    않는다 — 광고를 쓰지 않는 앱에 테스트 AdMob 앱 ID 를 넣은 채로 프로덕션에 올리지 않기 위한 것이다.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application>
+
+        <!-- Required by the AdMob SDK: it throws on startup when this is missing. Value set in app/build.gradle.kts. -->
+        <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="${admobAppId}" />
+
+        <!--
+            Keyboard ⚡충전 button → rewarded-ad popup over the app the user is typing in.
+            Own task affinity + excludeFromRecents so MainActivity is not brought up; finish() returns to that app.
+        -->
+        <activity
+            android:name=".reward.RewardAdActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:taskAffinity="com.typeright.app.reward"
+            android:theme="@style/Theme.TypeRight.Translucent">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="typeright" android:host="reward" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

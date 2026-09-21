@@ -15,10 +15,16 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.TypeRight">
 
-        <!-- Required by the AdMob SDK: it throws on startup when this is missing. Value set in app/build.gradle.kts. -->
+        <!--
+            Firebase Analytics 가 기본으로 수집하는 광고 ID(AdvertisingIdClient)를 끈다. 광고를 싣지 않는 앱이라
+            필요가 없고, 켜 두면 Play '데이터 보안' 양식에 광고 ID 수집을 신고해야 한다(human-todo B2-1).
+            측정하려는 것은 기본 키보드 유지율·리텐션뿐이며 그 지표는 광고 ID 없이도 그대로 나온다.
+            google-services.json 이 없으면 계측 자체가 no-op 이라 이 설정도 무의미하다.
+        -->
         <meta-data
-            android:name="com.google.android.gms.ads.APPLICATION_ID"
-            android:value="${admobAppId}" />
+            android:name="google_analytics_adid_collection_enabled"
+            android:value="false" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -34,25 +40,6 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="typeright" android:host="login" />
-            </intent-filter>
-        </activity>
-
-        <!--
-            Keyboard ⚡충전 button → rewarded-ad popup over the app the user is typing in.
-            Own task affinity + excludeFromRecents so MainActivity is not brought up; finish() returns to that app.
-        -->
-        <activity
-            android:name=".reward.RewardAdActivity"
-            android:excludeFromRecents="true"
-            android:exported="true"
-            android:launchMode="singleTask"
-            android:taskAffinity="com.typeright.app.reward"
-            android:theme="@style/Theme.TypeRight.Translucent">
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="typeright" android:host="reward" />
             </intent-filter>
         </activity>
 

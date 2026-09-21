@@ -3,9 +3,14 @@
 AI 기반 실시간 맞춤법 & 위트 훈수 키보드. 온디바이스 규칙 교정(무료·무제한)에 AI 문맥 교정 + 피드백 3모드(매운맛 훈수 / 맞춤법 경찰 / 상냥한 선생님)를 얹은 커스텀 키보드(IME).
 
 > **현재 출시 모드: 온디바이스 전용** (2026-09-21 기획자 결정 — [planning-and-dev-log.md](docs/planning-and-dev-log.md) 14절).
-> AI 문맥 교정·쿼터·PRO 구독·광고·구글 로그인은 `typeright.cloudFeatures` 플래그로 **꺼져 있다**(기본 `false`).
-> 코드·서버·테스트는 전부 그대로 있고, `gradle.properties`에 `typeright.cloudFeatures=true` 한 줄이면 되살아난다.
-> 아래 문서의 AI·결제·계정 관련 절은 **되살릴 때** 필요한 내용이다.
+> AI 문맥 교정·쿼터·PRO 구독·광고·구글 로그인이 **꺼져 있다.** product flavor 로 갈린다:
+>
+> | flavor | 빌드 | 내용 |
+> |---|---|---|
+> | `ondevice` (기본) | `./gradlew :app:assembleOndeviceDebug` | 출시 형태. **AdMob·Play Billing SDK 가 APK 에 없다** |
+> | `cloud` | `./gradlew :app:assembleCloudDebug` | AI·로그인·결제·광고 전부 복구 |
+>
+> 코드·서버·테스트는 전부 그대로 있다. 아래 문서의 AI·결제·계정 관련 절은 **되살릴 때** 필요한 내용이다.
 
 **MVP 범위: Android 단독 출시.** 스택: Android(Kotlin, InputMethodService, Compose) · Python FastAPI · Supabase(Auth + Postgres) · OpenAI GPT-4o-mini · Vercel(서울 `icn1`).
 
@@ -73,14 +78,21 @@ curl -s localhost:8790/v1/grammar-check -H 'content-type: application/json' -H '
 
 | 속성 | 기본값 | 없으면 |
 |---|---|---|
-| `typeright.cloudFeatures` | `false` | **AI·로그인·결제·광고·단축어 동기화가 전부 꺼진 온디바이스 전용 빌드.** `true`로 되살림 |
 | `typeright.googleWebClientId` | 빈 값 | 구글 로그인 불가 |
-| `typeright.admobAppId` | Google **테스트** 앱 ID | 테스트 광고만 표시 |
-| `typeright.admobRewardedUnitId` | Google **테스트** 광고 단위 | 테스트 광고만 표시 (SSV 콜백 없음 → 충전 안 됨) |
+| `typeright.admobAppId` | Google **테스트** 앱 ID | 테스트 광고만 표시 (cloud flavor 전용) |
+| `typeright.admobRewardedUnitId` | Google **테스트** 광고 단위 | 테스트 광고만 표시 (SSV 콜백 없음 → 충전 안 됨, cloud flavor 전용) |
 | `typeright.apiBaseUrl.debug` | `http://10.0.2.2:8790` | — |
 
 AdMob 기본값이 테스트 ID라서 계정 없이도 앱이 뜨고 광고 화면까지 확인할 수 있다. 다만 테스트 광고는 SSV 콜백을
-보내지 않으므로 **실제 훈수 충전은 실제 AdMob ID를 넣어야 동작**한다.
+보내지 않으므로 **실제 훈수 충전은 실제 AdMob ID를 넣어야 동작**한다. 이 값들은 `cloud` flavor 에만 쓰인다 —
+출시 형태인 `ondevice` 에는 AdMob SDK 자체가 들어가지 않는다.
+
+## 릴리스 서명
+
+`android/keystore.properties`(gitignore 됨)가 있으면 릴리스 빌드에 서명한다. 없으면 **서명 없이** 빌드된다
+(디버그 키로 서명하지 않는다 — 그런 AAB를 Play에 올리면 업로드 키가 디버그 키로 굳는다).
+설정 방법은 [keystore.properties.example](android/keystore.properties.example) 참고.
+**`.jks`·비밀번호는 저장소에 넣지 않는다.**
 
 쿼터 함수는 service role에만 실행 권한이 있고, 테이블은 RLS로 클라이언트 접근이 막혀 있다. 단축어(`shortcuts`)만 클라이언트가 PostgREST로 직접 읽고 쓰며, 쓰기는 RLS에서 PRO 여부를 검사한다.
 

@@ -444,16 +444,19 @@ backend·Android 양쪽 테스트에 연결했다. 규칙을 넓히다 오탐이
 10.6이 이미 "로그인 강제 없음, 온디바이스로 즉시 사용"을 확정해 둔 덕분에 온디바이스 경로가 이미 기본 경로였고,
 그래서 이번 변경이 기능 삭제가 아니라 진입점 차단으로 끝났다.
 
-### 14.2 비활성화 방식 — 플래그 한 개
-`keyboard` 모듈의 `BuildConfig.CLOUD_FEATURES`(Gradle 속성 `typeright.cloudFeatures`, **기본 false**) 하나를
+### 14.2 비활성화 방식 — flavor 한 축
+`BuildConfig.CLOUD_FEATURES` 하나를
 [FeatureFlags.kt](../android/keyboard/src/main/java/com/typeright/keyboard/FeatureFlags.kt)가 받아
-`ai / auth / billing / ads / shortcutSync / proGate`로 나눠 준다. 되살릴 때는
+`ai / auth / billing / ads / shortcutSync / proGate`로 나눠 준다. 그 값은 **product flavor**가 정한다
+(`features` dimension, :app 과 :keyboard 공통):
 
-```
-gradle.properties: typeright.cloudFeatures=true
-```
+| flavor | `CLOUD_FEATURES` | 빌드 |
+|---|---|---|
+| `ondevice` (기본, 출시 형태) | `false` | `./gradlew :app:assembleOndeviceDebug` · `:app:bundleOndeviceRelease` |
+| `cloud` | `true` | `./gradlew :app:assembleCloudDebug` |
 
-한 줄이면 끝이다. **서버 코드·Supabase 마이그레이션·Play 결제 코드·테스트는 하나도 지우지 않았다.**
+처음에는 Gradle 속성 한 개로 했다가 flavor 로 바꿨다. 속성으로는 **소스셋과 매니페스트를 가를 수 없어서**
+AdMob SDK 와 `com.google.android.gms.ads.APPLICATION_ID` 메타데이터가 출시 AAB 에 그대로 남기 때문이다(14.7). **서버 코드·Supabase 마이그레이션·Play 결제 코드·테스트는 하나도 지우지 않았다.**
 백엔드는 배포만 안 할 뿐 그대로 있고, `AiCallPolicy`·`ShortcutAccess` 같은 순수 로직은 손대지 않아
 단위 테스트도 그대로 남아 있다(차단은 전부 호출부에서 한다).
 
@@ -503,3 +506,52 @@ gradle.properties: typeright.cloudFeatures=true
 - 같은 날 다른 세션이 에뮬레이터를 순서 없이 조작해 이 앱 화면에 탭이 흘러든 사고가 있었으나,
   키보드 활성화 상태·앱 설정값 모두 변경 없음을 확인했다(IME 미활성, 기본값 유지). 이후 재확인은 전부
   조작 전 포그라운드를 확인하고 진행했다
+
+### 14.7 기획자 답변 반영 (2026-09-21) — SDK 분리·서명·계측
+
+| 항목 | 결정 | 반영 |
+|---|---|---|
+| 커스텀 단축어 | **이번 출시에 무료로 연다** | 10.1의 "추가는 PRO 전용"은 **이번 출시에 한해 예외**다. 결제를 되살리면(`cloud` flavor) 원래 페이월이 자동 복구된다 |
+| 경찰 모드 입력 차단 | **잠근 채로 둔다** | 모드는 되고 진동 경고까지. 개발 기본안 유지 |
+| Firebase 계측 | **넣는다** | 코드는 이미 준비됨(12.5). 사람이 `google-services.json`만 넣으면 됨 → human-todo [이번] 항목으로 승격 |
+| AdMob SDK | **뺀다** | 아래 참고 |
+| Play Billing SDK | **같이 뺀다** (개발 판단) | 아래 참고 |
+
+**AdMob·Play Billing을 APK에서 완전히 제거했다.** 플래그만으로는 부족했다 — Gradle 속성은 코드 분기만 바꿀 뿐
+의존성과 매니페스트는 그대로라, 광고를 싣지도 않는 앱에 **Google 테스트 AdMob 앱 ID**가 박힌 채로
+프로덕션 AAB가 나간다. 그래서 `features` dimension의 product flavor로 바꿔 소스셋·매니페스트·의존성을 함께 갈랐다.
+
+- `app/src/cloud/` — `ads/`, `billing/`, `reward/`, `ui/SubscriptionScreen.kt` + `AndroidManifest.xml`
+  (AdMob 메타데이터, `RewardAdActivity` 선언)
+- `app/src/ondevice/` — `SubscriptionScreenStub.kt` 하나뿐. `TypeRightApp`의 탭 분기가 이름으로 참조해서
+  자리 채움이 필요하다(PRO 탭이 걸러지므로 **실행되지는 않는다**)
+- `cloudImplementation(libs.play.billing)` / `cloudImplementation(libs.play.services.ads)`
+- `RechargeButton`이 `RewardAdActivity`를 **클래스로** 참조하던 것을 딥링크(`typeright://reward`)로 바꿨다.
+  덕분에 스텁이 하나로 줄었다 (키보드·[맛춤뻡 검사]도 원래 딥링크를 쓴다)
+
+Play Billing도 같이 뺀 이유: 남겨 두면 Play Console에 인앱 상품을 신고해야 하는데 **살 수 있는 상품이 없고**,
+구매 경로가 없는 앱에 결제 SDK가 들어 있으면 심사에서 설명할 거리만 된다. 스텁 하나로 끝나서 비용도 낮았다.
+
+검증 (APK dex 실측):
+
+| | `ondevice` | `cloud` |
+|---|---|---|
+| APK 크기 (debug) | 16MB | 19MB |
+| `gms/ads` 참조 | **12** (전부 `gms/ads/identifier`) | 1409 |
+| `billingclient` 참조 | **0** | 13 |
+| `RewardAdActivity` | **0** | 16 |
+| 매니페스트의 AdMob·보상광고 항목 | **0** | 2 |
+
+`ondevice`에 남은 12개는 전부 `gms/ads/identifier`(광고 ID 조회)로, **AdMob이 아니라 Firebase Analytics**가
+끌고 오는 것이다. 광고를 싣지 않는 앱이므로 매니페스트에 `google_analytics_adid_collection_enabled=false`를
+넣어 수집 자체를 껐다 — Play '데이터 보안'에서 광고 ID 수집을 신고하지 않아도 되고, 측정하려던
+기본 키보드 유지율·리텐션은 광고 ID 없이도 그대로 나온다.
+
+**릴리스 서명**: `android/keystore.properties`(gitignore)가 있으면 서명하고, 없으면 **서명 없이** 빌드한다.
+디버그 키로 폴백하지 않는다 — 디버그 키로 서명된 AAB를 Play에 올리면 업로드 키가 그대로 굳어 버린다.
+양식은 [keystore.properties.example](../android/keystore.properties.example). 키스토어 생성·보관은 사람 작업이다.
+
+**`.gitignore` 보강**: `google-services.json`, `*.jks`, `*.keystore`, `keystore.properties`가
+무시 목록에 없었다. 사람이 파일을 놓는 순간 커밋될 수 있는 상태였어서 먼저 막았다.
+
+검증: `ondevice`·`cloud` 양쪽 **169개 통과 / 실패 0**, `:app:bundleOndeviceRelease` 성공(서명 없음 = 의도대로).

@@ -11,9 +11,6 @@ val sharedDir: File = rootProject.layout.projectDirectory.dir("../shared").asFil
 fun stringProp(name: String, default: String): String =
     (project.findProperty(name) as String?)?.takeIf { it.isNotBlank() } ?: default
 
-fun boolProp(name: String, default: Boolean): Boolean =
-    (project.findProperty(name) as String?)?.takeIf { it.isNotBlank() }?.toBooleanStrict() ?: default
-
 fun String.asBuildConfigString(): String = "\"" + replace("\\", "\\\\").replace("\"", "\\\"") + "\""
 
 android {
@@ -23,13 +20,24 @@ android {
     defaultConfig {
         minSdk = 26
         consumerProguardFiles("consumer-rules.pro")
-        // Single kill switch for everything that needs a server, an account or a purchase: AI 문맥 교정, 쿼터·충전,
-        // 보상형 광고, PRO 구독, 구글 로그인, 단축어 동기화. false => 온디바이스 전용 빌드(계정·키 없이 스토어 제출 가능).
-        // 되살릴 때는 gradle.properties 에 `typeright.cloudFeatures=true` 한 줄. 자세한 것은 FeatureFlags.kt.
-        buildConfigField("boolean", "CLOUD_FEATURES", boolProp("typeright.cloudFeatures", false).toString())
         // Empty SUPABASE_URL => backend dev mode: requests carry X-Dev-User-Id instead of a bearer token.
         buildConfigField("String", "SUPABASE_URL", stringProp("typeright.supabaseUrl", "").asBuildConfigString())
         buildConfigField("String", "SUPABASE_ANON_KEY", stringProp("typeright.supabaseAnonKey", "").asBuildConfigString())
+    }
+
+    // 서버·계정·결제가 필요한 기능 전체를 켜고 끄는 축. `ondevice`(기본 출시 형태)에서는 AI·로그인·결제·광고가
+    // 없고, `cloud`에서는 전부 살아난다. :app 이 같은 dimension 을 써서 소스셋·매니페스트·의존성까지 함께 갈린다.
+    // 자세한 것은 FeatureFlags.kt 와 docs/planning-and-dev-log.md 14절.
+    flavorDimensions += "features"
+    productFlavors {
+        create("ondevice") {
+            dimension = "features"
+            buildConfigField("boolean", "CLOUD_FEATURES", "false")
+        }
+        create("cloud") {
+            dimension = "features"
+            buildConfigField("boolean", "CLOUD_FEATURES", "true")
+        }
     }
 
     buildTypes {

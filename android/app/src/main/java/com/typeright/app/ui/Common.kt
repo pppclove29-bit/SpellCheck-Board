@@ -1,6 +1,7 @@
 package com.typeright.app.ui
 
 import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -20,7 +21,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.typeright.app.reward.RewardAdActivity
+import com.typeright.keyboard.TypeRightServices
 import com.typeright.keyboard.account.AccountState
 
 @Composable
@@ -80,13 +81,25 @@ fun AccountSummaryCard(account: AccountState, isDevAuth: Boolean, onRefresh: (()
     }
 }
 
-/** ⚡충전 → RewardAdActivity (same popup the keyboard opens). Emphasized when today's quota is used up. */
+/**
+ * ⚡충전 → 보상형 광고 팝업(키보드가 여는 것과 같은 화면). 오늘 쿼터를 다 쓰면 강조된다.
+ *
+ * 클래스 참조 대신 딥링크로 연다. 광고가 빠진 온디바이스 빌드에서는 `RewardAdActivity` 자체가 APK에 없으므로,
+ * 이름으로 참조하면 이 파일이 컴파일되지 않는다(키보드·[맛춤뻡 검사]도 같은 이유로 딥링크를 쓴다).
+ */
 @Composable
 fun RechargeButton(account: AccountState, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val empty = account.quota?.remaining == 0
     Button(
-        onClick = { context.startActivity(Intent(context, RewardAdActivity::class.java)) },
+        onClick = {
+            runCatching {
+                context.startActivity(
+                    Intent(Intent.ACTION_VIEW, Uri.parse(TypeRightServices.REWARD_DEEP_LINK))
+                        .setPackage(context.packageName),
+                )
+            }
+        },
         modifier = modifier.fillMaxWidth(),
         colors = if (empty) {
             ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)

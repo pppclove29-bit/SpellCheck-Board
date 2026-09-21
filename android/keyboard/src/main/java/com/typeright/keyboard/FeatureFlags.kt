@@ -4,8 +4,13 @@ package com.typeright.keyboard
  * 온디바이스 전용 출시를 위한 기능 스위치 (2026-09-21 결정 — planning-and-dev-log.md 14절).
  *
  * 서버·계정·결제가 필요한 기능을 **코드를 지우지 않고** 한 곳에서 끈다. 모든 판단은
- * [BuildConfig.CLOUD_FEATURES] 하나에서 갈라지므로, 되살릴 때는 `gradle.properties`에
- * `typeright.cloudFeatures=true` 한 줄만 넣으면 된다.
+ * [BuildConfig.CLOUD_FEATURES] 하나에서 갈라지고, 그 값은 **product flavor**가 정한다:
+ *
+ * - `ondevice` (기본, 출시 형태) — `false`. AdMob·Play Billing SDK 와 관련 매니페스트 항목이
+ *   APK 에 **아예 들어가지 않는다**(`app/src/cloud/` 소스셋과 `cloudImplementation` 의존성이 빠진다).
+ * - `cloud` — `true`. 전부 되살아난다.
+ *
+ * 되살리기: `./gradlew :app:assembleCloudDebug` (또는 Android Studio 의 Build Variants 에서 cloud 선택).
  *
  * 꺼져 있을 때 앱은 **로그인 없는 온디바이스 경로가 기본**이 된다:
  * 규칙 사전 교정, 3모드 훈수, 짤 카드, 이모지, 롱프레스 숫자, 보안 키패드, 텍스트 선택 검사,
