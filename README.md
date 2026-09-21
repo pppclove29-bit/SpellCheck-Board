@@ -2,6 +2,11 @@
 
 AI 기반 실시간 맞춤법 & 위트 훈수 키보드. 온디바이스 규칙 교정(무료·무제한)에 AI 문맥 교정 + 피드백 3모드(매운맛 훈수 / 맞춤법 경찰 / 상냥한 선생님)를 얹은 커스텀 키보드(IME).
 
+> **현재 출시 모드: 온디바이스 전용** (2026-09-21 기획자 결정 — [planning-and-dev-log.md](docs/planning-and-dev-log.md) 14절).
+> AI 문맥 교정·쿼터·PRO 구독·광고·구글 로그인은 `typeright.cloudFeatures` 플래그로 **꺼져 있다**(기본 `false`).
+> 코드·서버·테스트는 전부 그대로 있고, `gradle.properties`에 `typeright.cloudFeatures=true` 한 줄이면 되살아난다.
+> 아래 문서의 AI·결제·계정 관련 절은 **되살릴 때** 필요한 내용이다.
+
 **MVP 범위: Android 단독 출시.** 스택: Android(Kotlin, InputMethodService, Compose) · Python FastAPI · Supabase(Auth + Postgres) · OpenAI GPT-4o-mini · Vercel(서울 `icn1`).
 
 ## 구조
@@ -68,6 +73,7 @@ curl -s localhost:8790/v1/grammar-check -H 'content-type: application/json' -H '
 
 | 속성 | 기본값 | 없으면 |
 |---|---|---|
+| `typeright.cloudFeatures` | `false` | **AI·로그인·결제·광고·단축어 동기화가 전부 꺼진 온디바이스 전용 빌드.** `true`로 되살림 |
 | `typeright.googleWebClientId` | 빈 값 | 구글 로그인 불가 |
 | `typeright.admobAppId` | Google **테스트** 앱 ID | 테스트 광고만 표시 |
 | `typeright.admobRewardedUnitId` | Google **테스트** 광고 단위 | 테스트 광고만 표시 (SSV 콜백 없음 → 충전 안 됨) |

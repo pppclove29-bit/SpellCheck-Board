@@ -50,6 +50,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import com.typeright.app.share.ShareCardActivity
 import com.typeright.app.ui.theme.TypeRightTheme
+import com.typeright.keyboard.FeatureFlags
 import com.typeright.keyboard.TypeRightServices
 import com.typeright.keyboard.analytics.Events
 import com.typeright.keyboard.api.AiStatus
@@ -129,6 +130,9 @@ private fun ProcessTextDialog(
         val engine = withContext(Dispatchers.IO) { runCatching { services.ruleEngine }.getOrNull() }
         val local = engine?.check(text).orEmpty()
         ui = CheckUi(ready = true, mode = mode, corrections = local, feedback = engine?.feedback(local, mode))
+
+        // 온디바이스 전용 빌드: 규칙 교정 결과만 보여주고 끝낸다. AI 안내·충전 버튼을 띄우지 않는다.
+        if (!FeatureFlags.ai) return@LaunchedEffect
 
         val signedIn = services.isDevAuth || services.auth.userId() != null
         val account = services.account.current()

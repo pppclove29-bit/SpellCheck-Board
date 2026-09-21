@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.typeright.app.ime.ImeStatus
+import com.typeright.keyboard.FeatureFlags
 import com.typeright.keyboard.TypeRightServices
 import com.typeright.keyboard.analytics.Events
 import com.typeright.keyboard.analytics.UserProperty
@@ -36,6 +37,8 @@ enum class AppTab(val label: String, val icon: String) {
 fun TypeRightApp(requestedTab: AppTab?, onRequestedTabConsumed: () -> Unit, focusTick: Int) {
     val context = LocalContext.current
     val services = remember { TypeRightServices.get(context) }
+    // 결제가 없는 빌드에서 PRO 탭은 살 수 없는 상품만 보여 주는 막다른 길이라 탭 자체를 뺀다.
+    val tabs = remember { AppTab.entries.filter { it != AppTab.PRO || FeatureFlags.billing } }
     var tab by rememberSaveable { mutableStateOf(AppTab.ONBOARDING) }
     val settings by services.settings.settings.collectAsStateWithLifecycle(initialValue = TypeRightSettings())
     val account by services.account.account.collectAsStateWithLifecycle(initialValue = AccountState())
@@ -51,7 +54,7 @@ fun TypeRightApp(requestedTab: AppTab?, onRequestedTabConsumed: () -> Unit, focu
     // Host-app open (already signed in): cache /v1/me (PRO + quota), then sync custom shortcuts with Supabase.
     // Fresh sign-ins do the same inside GoogleSignInState (which also reports restored shortcuts).
     LaunchedEffect(Unit) {
-        if (services.auth.authState.first().isSignedIn) {
+        if (FeatureFlags.cloud && services.auth.authState.first().isSignedIn) {
             services.account.refresh()
             services.shortcutSync.sync(services.account.current().isPro)
         }
@@ -74,7 +77,7 @@ fun TypeRightApp(requestedTab: AppTab?, onRequestedTabConsumed: () -> Unit, focu
     Scaffold(
         bottomBar = {
             NavigationBar {
-                AppTab.entries.forEach { t ->
+                tabs.forEach { t ->
                     NavigationBarItem(
                         selected = tab == t,
                         onClick = { tab = t },

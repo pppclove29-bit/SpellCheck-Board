@@ -35,6 +35,7 @@ import com.typeright.keyboard.analytics.Events
 import com.typeright.keyboard.api.AiStatus
 import com.typeright.keyboard.api.ApiResult
 import com.typeright.keyboard.check.AiCallPolicy
+import com.typeright.keyboard.FeatureFlags
 import com.typeright.keyboard.check.AiDecision
 import com.typeright.keyboard.check.CheckSnapshot
 import com.typeright.keyboard.check.CorrectionApplier
@@ -197,7 +198,7 @@ class TypeRightIME :
         ui.panel = KeyboardPanel.KEYS
         setLayout(initialLayout(info))
         resetCheckState()
-        if (!ui.secure && signedIn) {
+        if (!ui.secure && signedIn && FeatureFlags.cloud) {
             // Cache /v1/me (PRO + quota) on keyboard start; not an AI call, no text is sent.
             lifecycleScope.launch { services.account.refreshIfStale() }
         }
@@ -550,6 +551,9 @@ class TypeRightIME :
     }
 
     private fun maybeRequestAi(snap: CheckSnapshot) {
+        // 온디바이스 전용 빌드: 네트워크를 타는 경로를 정책 판단 이전에 끊는다. AiCallPolicy 자체는 그대로 둔다
+        // (AI를 되살릴 때 쓰고, 단위 테스트도 그대로 유지된다).
+        if (!FeatureFlags.ai) return
         val text = snap.text
         val decision = AiCallPolicy.decide(
             secure = ui.secure,
@@ -632,9 +636,12 @@ class TypeRightIME :
                 corrections.forEach { add(ChipUi.CorrectionChip(it, snap)) }
                 if (police && !policeGate.isSentenceIgnored(snap.absStart)) add(ChipUi.IgnoreChip(snap))
             }
-            if (!signedIn) add(ChipUi.LoginChip)
+            // 온디바이스 전용 빌드에는 로그인 자체가 없으므로 칩도 띄우지 않는다.
+            if (FeatureFlags.auth && !signedIn) add(ChipUi.LoginChip)
         }
         val status = when {
+            // AI가 아예 없는 빌드에서 "AI 꺼짐" 배지는 없는 기능을 가리키는 잔상이라 상태 표시를 비운다.
+            !FeatureFlags.ai -> BarStatus.NONE
             !settings.aiActive -> BarStatus.AI_OFF
             account.aiPaused -> BarStatus.AI_PAUSED
             remoteChecking -> BarStatus.CHECKING
@@ -645,7 +652,7 @@ class TypeRightIME :
             chips = chips,
             status = status,
             isPro = account.isPro,
-            showRecharge = signedIn && !account.isPro,
+            showRecharge = FeatureFlags.ads && signedIn && !account.isPro,
             rechargeEmphasized = account.quota?.remaining == 0,
             mode = currentMode,
             showModeChip = true,
@@ -695,13 +702,14 @@ class TypeRightIME :
     /** Mode chip: cycles this app's mode and saves it as a per-app override (police needs sign-in, so it's skipped). */
     override fun onModeChipClick() {
         if (ui.secure) return
-        val next = FeedbackModeResolver.next(currentMode, allowPolice = signedIn)
+        // 로그인이 없는 빌드에서는 경찰 모드를 막으면 모드 자체가 사라지므로 그대로 연다(무료 동작 = 진동 경고).
+        val next = FeedbackModeResolver.next(currentMode, allowPolice = signedIn || !FeatureFlags.auth)
         val pkg = currentPackage
         lifecycleScope.launch {
             if (pkg.isNullOrEmpty()) services.settings.setFeedbackMode(next) else services.settings.setAppModeOverride(pkg, next)
         }
         services.analytics.log(Events.modeChanged(next.apiValue, perApp = !pkg.isNullOrEmpty()))
-        val policeHint = if (!signedIn) " · 경찰 모드는 로그인 후" else ""
+        val policeHint = if (FeatureFlags.auth && !signedIn) " · 경찰 모드는 로그인 후" else ""
         showFeedback(FeedbackStyle.NOTICE, "${FeedbackModeResolver.emoji(next)} 이 앱에서는 ${next.label} 모드$policeHint")
     }
 

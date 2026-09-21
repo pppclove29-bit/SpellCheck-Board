@@ -31,6 +31,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.typeright.app.auth.rememberGoogleSignIn
+import com.typeright.keyboard.FeatureFlags
 import com.typeright.keyboard.TypeRightServices
 import com.typeright.keyboard.account.AccountState
 import com.typeright.keyboard.api.ApiResult
@@ -69,7 +70,8 @@ fun SettingsScreen(
     ) {
         ScreenTitle("설정", "키보드와 앱이 같은 설정을 공유해요. 바꾸면 키보드에 바로 반영돼요.")
 
-        SectionCard {
+        // 온디바이스 전용 빌드: 계정·AI·충전 카드가 통째로 빠진다(로그인 개념 자체가 없다).
+        if (FeatureFlags.auth) SectionCard {
             Text("계정", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(4.dp))
             when (authState) {
@@ -104,12 +106,12 @@ fun SettingsScreen(
             }
         }
 
-        if (authState.isSignedIn) {
+        if (FeatureFlags.cloud && authState.isSignedIn) {
             AccountSummaryCard(account, services.isDevAuth, onRefresh = { scope.launch { services.account.refresh() } })
-            if (!account.isPro) RechargeButton(account)
+            if (FeatureFlags.ads && !account.isPro) RechargeButton(account)
         }
 
-        SectionCard { AiToggleRow(services, settings, authState, signIn) }
+        if (FeatureFlags.ai) SectionCard { AiToggleRow(services, settings, authState, signIn) }
 
         SectionCard {
             Text("기본 피드백 모드", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
@@ -119,18 +121,24 @@ fun SettingsScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             FeedbackMode.entries.forEach { mode ->
+                // 경찰 모드 기본 설명은 PRO 입력 차단을 언급한다. 결제가 없는 빌드에서는 없는 기능을 광고하게 되므로
+                // 설명 자체를 이 빌드에서 실제로 되는 동작으로 갈아 끼운다.
+                val policeNoPro = mode == FeedbackMode.POLICE && !FeatureFlags.billing
+                val description = if (policeNoPro) "오류를 찾으면 사이렌 진동으로 알려 줘요." else mode.description
                 val note = when {
                     mode != FeedbackMode.POLICE -> ""
+                    // 로그인이 없는 빌드에서는 경찰 모드를 바로 고를 수 있다(추가 안내 없음).
+                    !FeatureFlags.auth -> ""
                     !authState.isSignedIn -> "\n로그인이 필요해요."
                     !account.isPro -> "\n무료 플랜: 진동 경고만 (입력 차단은 PRO)"
                     else -> ""
                 }
                 OptionRow(
                     title = mode.label,
-                    description = mode.description + note,
+                    description = description + note,
                     selected = settings.feedbackMode == mode,
                     onSelect = {
-                        if (mode == FeedbackMode.POLICE && !authState.isSignedIn) {
+                        if (mode == FeedbackMode.POLICE && FeatureFlags.auth && !authState.isSignedIn) {
                             // Police mode needs an account: log in first; on cancel the mode stays unchanged.
                             signIn.signIn(then = { services.settings.setFeedbackMode(mode) })
                         } else {

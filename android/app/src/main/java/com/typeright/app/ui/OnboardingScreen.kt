@@ -34,6 +34,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import com.typeright.app.auth.rememberGoogleSignIn
 import com.typeright.app.ime.ImeStatus
+import com.typeright.keyboard.FeatureFlags
 import com.typeright.keyboard.TypeRightServices
 import com.typeright.keyboard.auth.AuthState
 import com.typeright.keyboard.settings.TypeRightSettings
@@ -64,7 +65,10 @@ fun OnboardingScreen(
             .verticalScroll(rememberScrollState())
             .padding(20.dp),
     ) {
-        ScreenTitle("TypeRight 시작하기", "맞춤법을 고쳐 주는 AI 키보드를 설정해요.")
+        ScreenTitle(
+            "TypeRight 시작하기",
+            if (FeatureFlags.ai) "맞춤법을 고쳐 주는 AI 키보드를 설정해요." else "맞춤법을 고쳐 주는 키보드를 설정해요. 전부 기기 안에서 동작해요.",
+        )
 
         StepCard(
             number = 1,
@@ -87,9 +91,16 @@ fun OnboardingScreen(
             )
             Spacer(Modifier.height(4.dp))
             Text(
-                "• TypeRight는 입력 내용을 저장하지 않아요.\n" +
-                    "• 비밀번호·보안 입력란과 시크릿 모드에서는 검사·네트워크를 완전히 끄고 '보안 키패드'로 동작해요.\n" +
-                    "• 맞춤법 규칙 검사는 기기 안에서 해요. AI 훈수는 직접 켜고 동의한 경우에만 문장을 서버로 보내요.",
+                if (FeatureFlags.ai) {
+                    "• TypeRight는 입력 내용을 저장하지 않아요.\n" +
+                        "• 비밀번호·보안 입력란과 시크릿 모드에서는 검사·네트워크를 완전히 끄고 '보안 키패드'로 동작해요.\n" +
+                        "• 맞춤법 규칙 검사는 기기 안에서 해요. AI 훈수는 직접 켜고 동의한 경우에만 문장을 서버로 보내요."
+                } else {
+                    // 온디바이스 전용 빌드: 입력 텍스트가 나가는 경로가 코드에 없다. 문구도 그에 맞춘다.
+                    "• TypeRight는 입력 내용을 저장하지 않아요.\n" +
+                        "• 비밀번호·보안 입력란과 시크릿 모드에서는 검사를 완전히 끄고 '보안 키패드'로 동작해요.\n" +
+                        "• 맞춤법 검사는 전부 기기 안에서 해요. 입력한 문장을 서버로 보내지 않고, 로그인도 필요 없어요."
+                },
                 style = MaterialTheme.typography.bodySmall,
             )
         }
@@ -104,7 +115,8 @@ fun OnboardingScreen(
             onClick = { context.getSystemService(InputMethodManager::class.java)?.showInputMethodPicker() },
         )
 
-        when (authState) {
+        // 온디바이스 전용 빌드: 로그인·AI 단계가 통째로 빠지고 1·2단계만 남는다.
+        if (FeatureFlags.auth) when (authState) {
             is AuthState.Dev -> SectionCard {
                 Text("3️⃣ 로그인 (개발 모드)", fontWeight = FontWeight.SemiBold)
                 Text(
@@ -129,7 +141,7 @@ fun OnboardingScreen(
             )
         }
 
-        SectionCard {
+        if (FeatureFlags.ai) SectionCard {
             Text("4️⃣ AI 훈수 켜기 (선택)", fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(6.dp))
             AiToggleRow(

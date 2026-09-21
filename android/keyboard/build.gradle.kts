@@ -11,6 +11,9 @@ val sharedDir: File = rootProject.layout.projectDirectory.dir("../shared").asFil
 fun stringProp(name: String, default: String): String =
     (project.findProperty(name) as String?)?.takeIf { it.isNotBlank() } ?: default
 
+fun boolProp(name: String, default: Boolean): Boolean =
+    (project.findProperty(name) as String?)?.takeIf { it.isNotBlank() }?.toBooleanStrict() ?: default
+
 fun String.asBuildConfigString(): String = "\"" + replace("\\", "\\\\").replace("\"", "\\\"") + "\""
 
 android {
@@ -20,6 +23,10 @@ android {
     defaultConfig {
         minSdk = 26
         consumerProguardFiles("consumer-rules.pro")
+        // Single kill switch for everything that needs a server, an account or a purchase: AI 문맥 교정, 쿼터·충전,
+        // 보상형 광고, PRO 구독, 구글 로그인, 단축어 동기화. false => 온디바이스 전용 빌드(계정·키 없이 스토어 제출 가능).
+        // 되살릴 때는 gradle.properties 에 `typeright.cloudFeatures=true` 한 줄. 자세한 것은 FeatureFlags.kt.
+        buildConfigField("boolean", "CLOUD_FEATURES", boolProp("typeright.cloudFeatures", false).toString())
         // Empty SUPABASE_URL => backend dev mode: requests carry X-Dev-User-Id instead of a bearer token.
         buildConfigField("String", "SUPABASE_URL", stringProp("typeright.supabaseUrl", "").asBuildConfigString())
         buildConfigField("String", "SUPABASE_ANON_KEY", stringProp("typeright.supabaseAnonKey", "").asBuildConfigString())

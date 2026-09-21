@@ -26,6 +26,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.typeright.keyboard.FeatureFlags
 import com.typeright.keyboard.TypeRightServices
 import com.typeright.keyboard.account.AccountState
 import com.typeright.keyboard.settings.Shortcut
@@ -48,6 +49,9 @@ fun ShortcutsScreen(
     onOpenPro: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
+    // 결제가 없는 빌드에서 PRO 잠금을 그대로 두면 아무도 단축어를 못 만드는 막다른 길이 된다 → 기기 안에서 열어 준다
+    // (클라우드 동기화만 빠짐). 결제를 되살리면 FeatureFlags.proGate 가 켜지면서 원래 페이월이 그대로 돌아온다.
+    val proUnlocked = FeatureFlags.proUnlocked(account.isPro)
     var editing by remember { mutableStateOf<Shortcut?>(null) }
     var creating by remember { mutableStateOf(false) }
     var showPaywall by remember { mutableStateOf(false) }
@@ -56,6 +60,7 @@ fun ShortcutsScreen(
 
     fun syncAfterEdit() {
         scope.launch {
+            if (!FeatureFlags.shortcutSync) return@launch
             syncMessage = when (services.shortcutSync.sync(account.isPro).status) {
                 ShortcutSyncRepository.Outcome.Status.SYNCED -> "☁️ 클라우드와 동기화했어요"
                 ShortcutSyncRepository.Outcome.Status.FAILED -> "동기화 실패 — 기기에는 저장됐고 다음에 다시 시도해요"
@@ -66,7 +71,7 @@ fun ShortcutsScreen(
 
     /** Add (target == null) or edit a custom shortcut, gated by [ShortcutAccess]. */
     fun requestAddOrEdit(target: Shortcut?) {
-        when (ShortcutAccess.forAddOrEdit(account.isPro, hasCustomShortcuts = settings.shortcuts.isNotEmpty())) {
+        when (ShortcutAccess.forAddOrEdit(proUnlocked, hasCustomShortcuts = settings.shortcuts.isNotEmpty())) {
             ShortcutAccess.ALLOWED -> if (target == null) creating = true else editing = target
             ShortcutAccess.EXPIRED -> showExpired = true
             ShortcutAccess.PAYWALL -> showPaywall = true
@@ -74,11 +79,15 @@ fun ShortcutsScreen(
     }
 
     Column(Modifier.fillMaxSize().padding(20.dp)) {
-        ScreenTitle("단축어", "키보드에서 단축어를 입력하면 제안 칩이 떠요. 칩을 누르면 문구로 바뀌어요.")
+        ScreenTitle(
+            "단축어",
+            "키보드에서 단축어를 입력하면 제안 칩이 떠요. 칩을 누르면 문구로 바뀌어요." +
+                if (FeatureFlags.shortcutSync) "" else " 단축어는 이 기기에만 저장돼요.",
+        )
         Button(
             onClick = { requestAddOrEdit(null) },
             modifier = Modifier.fillMaxWidth(),
-        ) { Text(if (account.isPro) "+ 단축어 추가" else "+ 단축어 추가 (PRO)") }
+        ) { Text(if (proUnlocked) "+ 단축어 추가" else "+ 단축어 추가 (PRO)") }
         syncMessage?.let { Text(it, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 6.dp)) }
 
         Spacer(Modifier.height(8.dp))
@@ -87,7 +96,7 @@ fun ShortcutsScreen(
             items(ShortcutRules.BUILT_IN, key = { "builtin:${it.key}" }) { s ->
                 ShortcutRow(s, trailing = { Text("기본", style = MaterialTheme.typography.labelSmall) })
             }
-            item { SectionLabel(if (account.isPro) "내 단축어" else "내 단축어 · PRO") }
+            item { SectionLabel(if (proUnlocked) "내 단축어" else "내 단축어 · PRO") }
             if (settings.shortcuts.isEmpty()) {
                 item {
                     Text(
@@ -150,7 +159,7 @@ fun ShortcutsScreen(
         )
     }
 
-    if (account.isPro && (creating || editing != null)) {
+    if (proUnlocked && (creating || editing != null)) {
         ShortcutDialog(
             initial = editing,
             existing = settings.shortcuts,

@@ -35,6 +35,7 @@ import com.typeright.app.ads.AdMobRewardedAdProvider
 import com.typeright.app.ads.RewardedAdProvider
 import com.typeright.app.ads.RewardedAdResult
 import com.typeright.app.ui.theme.TypeRightTheme
+import com.typeright.keyboard.FeatureFlags
 import com.typeright.keyboard.TypeRightServices
 import com.typeright.keyboard.account.AccountState
 import com.typeright.keyboard.account.RewardCreditPoller
@@ -50,6 +51,12 @@ import kotlinx.coroutines.launch
 class RewardAdActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // 광고가 없는 빌드에서는 ⚡충전 진입점이 이미 사라졌지만, 예전 딥링크(typeright://reward)가 남아 들어와도
+        // 빈 팝업을 띄우지 않고 그대로 닫는다. AdMob SDK 초기화도 여기서 막힌다.
+        if (!FeatureFlags.ads) {
+            finish()
+            return
+        }
         setContent { TypeRightTheme { RewardAdPopup(onClose = ::finish) } }
     }
 }
