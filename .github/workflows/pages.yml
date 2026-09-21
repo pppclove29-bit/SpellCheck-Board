@@ -7,6 +7,13 @@
 #
 # 사람이 한 번 해야 하는 설정: Settings → Pages → Source 를 "GitHub Actions" 로 바꾼다.
 # 공개 주소: https://pppclove29-bit.github.io/SpellCheck-Board/privacy/
+#
+# ⚠️ 그 설정을 하기 전까지 이 워크플로는 **실패한다. 정상이다** (Pages 가 없어서 배포할 곳이 없다).
+#    실패하는 동안 사이트는 뜨지 않고, 방침의 이메일 자리표시도 공개되지 않는다.
+#
+# ⚠️ 이 실패를 없애겠다고 configure-pages 에 `enablement: true` 를 넣지 마라.
+#    Pages 를 자동으로 켜 버려서 **문의 이메일 자리표시가 그대로 공개된다.**
+#    순서는 docs/human-todo.md B1-1(이메일 교체) → B1-2(공개 설정) 다.
 
 name: Deploy privacy page to Pages
 
