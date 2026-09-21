@@ -67,6 +67,13 @@ curl -s localhost:8790/v1/grammar-check -H 'content-type: application/json' -H '
 계정 결제, OAuth 클라이언트 생성, 개인정보처리방침, 실기기 확인처럼 코드로 끝낼 수 없는 항목은
 [docs/human-todo.md](docs/human-todo.md)에 모아 두었다.
 
+## 개인정보처리방침
+
+공개 페이지는 [site/privacy/index.html](site/privacy/index.html)이고 `site/`만 GitHub Pages로 배포한다
+(`docs/`는 내부 메모라 공개하지 않는다). **문구는 코드로 증명되는 사실이어야 한다** —
+어느 코드를 건드리면 어느 문장이 깨지는지는 [docs/privacy-claims.md](docs/privacy-claims.md)에 정리해 두었다.
+동작을 바꾸면 방침도 같이 고친다.
+
 ## Supabase 설정
 
 1. 프로젝트 생성 → Authentication → Providers → **Google 활성화** (Google Cloud의 Web client ID/secret 입력, Android는 같은 Web client ID를 `GOOGLE_WEB_CLIENT_ID`로 사용). Anonymous sign-ins는 끈다 (서버도 익명 토큰을 거부)

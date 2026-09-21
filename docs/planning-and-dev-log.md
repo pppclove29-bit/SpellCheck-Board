@@ -571,7 +571,9 @@ Play Billing도 같이 뺀 이유: 남겨 두면 Play Console에 인앱 상품�
 - `Links.PRIVACY_POLICY_URL` → `https://pppclove29-bit.github.io/SpellCheck-Board/privacy/`
   (자리표시였던 `typeright.notion.site` 교체). Pages 공개 설정은 사람 작업 — human-todo B1-2.
 
-**방침 문구는 코드와 한 줄씩 대조해서 썼다.** 공개 문서라 실제 동작과 어긋나면 안 되기 때문이다:
+**방침 문구는 코드와 한 줄씩 대조해서 썼다.** 공개 문서라 실제 동작과 어긋나면 안 되기 때문이다.
+대조표는 [privacy-claims.md](privacy-claims.md)에 **상시 문서로** 남겼다 — 아래 표는 작성 시점 기록이고,
+앞으로 코드를 바꿀 때 참조해야 하는 것은 그쪽이다(어느 코드를 건드리면 어느 문장이 깨지는지까지 적어 두었다):
 
 | 문구 | 근거 |
 |---|---|
@@ -600,3 +602,8 @@ Play Billing도 같이 뺀 이유: 남겨 두면 Play Console에 인앱 상품�
 검증: `ondevice`·`cloud` 양쪽 **169개 통과 / 실패 0**, `:app:assembleOndeviceDebug`·`:app:bundleOndeviceRelease`·
 `:app:assembleCloudDebug` 성공. 설정 '정보' 카드는 **빌드까지만 확인했고 화면 확인은 못 했다**(에뮬레이터가
 다른 세션 차례였다).
+
+**공개 순서를 문서에 못 박았다**: B1-1(문의 이메일 교체) → B1-2(GitHub Pages 공개 설정). 지금 페이지에는
+"(문의 이메일 주소를 넣어 주세요)" 자리표시가 남아 있고, Pages 설정을 켜는 순간 그 문장이 공개된다.
+코드를 push해도 그 설정 전까지는 사이트가 뜨지 않으므로 push 자체는 안전하다.
+(2026-09-21: 사용자가 앱 전용 이메일 주소를 새로 만들기로 결정, 생성 대기 중.)
