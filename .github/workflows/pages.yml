@@ -1,0 +1,43 @@
+# GitHub Pages: site/ 디렉토리만 공개한다.
+#
+# docs/ 를 쓰는 기본 방식(Settings → Pages → Deploy from a branch → /docs)을 쓰지 않는 이유:
+# 이 레포의 docs/ 는 기획 로그·수익 추정·사람 할 일 같은 내부 메모다. 레포가 public 이라 파일 자체는
+# 이미 보이지만, 웹사이트로 렌더링해 검색에 노출시킬 이유는 없다. 그래서 공개용 페이지만 site/ 에 두고
+# 이 워크플로로 그 폴더만 배포한다.
+#
+# 사람이 한 번 해야 하는 설정: Settings → Pages → Source 를 "GitHub Actions" 로 바꾼다.
+# 공개 주소: https://pppclove29-bit.github.io/SpellCheck-Board/privacy/
+
+name: Deploy privacy page to Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'site/**'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deployment
+        uses: actions/deploy-pages@v4

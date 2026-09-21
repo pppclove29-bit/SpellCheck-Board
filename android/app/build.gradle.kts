@@ -41,8 +41,9 @@ android {
         applicationId = "com.typeright.app"
         minSdk = 26
         targetSdk = 36
+        // 첫 공개 출시. 클로즈드 테스트 트랙에 올릴 때마다 versionCode 를 올린다(Play 는 중복을 거부한다).
         versionCode = 1
-        versionName = "0.1.0"
+        versionName = "1.0.0"
         // OAuth "Web application" client id used as serverClientId for Google Sign-In (may be empty in debug).
         buildConfigField(
             "String", "GOOGLE_WEB_CLIENT_ID",
@@ -85,6 +86,10 @@ android {
 
     buildTypes {
         release {
+            // R8 을 끈 채로 첫 출시를 낸다. 키보드는 잘못 줄이면 **사용자가 글자를 못 치는** 상태가 되는데,
+            // 릴리스 키스토어가 아직 없어 축소된 릴리스 빌드를 실기기에서 검증할 방법이 없다.
+            // 첫 출시의 목적은 리텐션 측정이지 용량 절감이 아니다(무축소 AAB 도 14MB 대).
+            // 키스토어가 생기고 릴리스 빌드를 실기기로 한 번 훑은 뒤 켠다 — human-todo 참고.
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             // keystore.properties 가 없으면 서명 없이 빌드된다 (위 주석 참고).

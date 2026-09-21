@@ -26,7 +26,8 @@ import com.typeright.keyboard.settings.TypeRightSettings
 import kotlinx.coroutines.launch
 
 object Links {
-    const val PRIVACY_POLICY_URL = "https://typeright.notion.site/privacy"
+    /** GitHub Pages(`site/privacy/`)로 배포된다. 페이지 공개 설정은 사람 작업 — human-todo B1 참고. */
+    const val PRIVACY_POLICY_URL = "https://pppclove29-bit.github.io/SpellCheck-Board/privacy/"
 }
 
 /** Play "prominent disclosure" shown the first time AI features are turned on. */

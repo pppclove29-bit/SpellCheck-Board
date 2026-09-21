@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Android 13+ '테마 아이콘'용 단색 도안. 시스템이 색을 입히므로 모양만 남긴다
+    (전경과 달리 흰색 본체 + 파란 체크로 나누지 않고, 본체를 테두리로 그려 체크가 파묻히지 않게 했다).
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Keyboard body (outline) -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="5"
+        android:strokeLineJoin="round"
+        android:pathData="M30,40h48a4,4 0,0 1,4 4v22a4,4 0,0 1,-4 4h-48a4,4 0,0 1,-4 -4v-22a4,4 0,0 1,4 -4z" />
+    <!-- Check mark -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M42,55l8,8l16,-16" />
+</vector>

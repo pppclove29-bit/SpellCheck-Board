@@ -1,5 +1,7 @@
 package com.typeright.app.ui
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -7,6 +9,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
@@ -28,8 +31,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.typeright.app.BuildConfig
 import com.typeright.app.auth.rememberGoogleSignIn
 import com.typeright.keyboard.FeatureFlags
 import com.typeright.keyboard.TypeRightServices
@@ -61,6 +66,8 @@ fun SettingsScreen(
     var confirmDelete by remember { mutableStateOf(false) }
     var confirmLogout by remember { mutableStateOf(false) }
     var accountMessage by remember { mutableStateOf<String?>(null) }
+    var showLicenses by remember { mutableStateOf(false) }
+    val context = LocalContext.current
 
     Column(
         Modifier
@@ -230,6 +237,33 @@ fun SettingsScreen(
                 )
             }
         }
+
+        SectionCard {
+            Text("정보", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            TextButton(
+                onClick = { openUrl(context, Links.PRIVACY_POLICY_URL) },
+                contentPadding = PaddingValues(vertical = 4.dp),
+            ) { Text("개인정보처리방침") }
+            TextButton(
+                onClick = { showLicenses = true },
+                contentPadding = PaddingValues(vertical = 4.dp),
+            ) { Text("오픈소스 라이선스") }
+            Text(
+                "버전 ${BuildConfig.VERSION_NAME}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
+    }
+
+    if (showLicenses) {
+        AlertDialog(
+            onDismissRequest = { showLicenses = false },
+            title = { Text("오픈소스 라이선스") },
+            text = { Text(OSS_LICENSES) },
+            confirmButton = { TextButton(onClick = { showLicenses = false }) { Text("닫기") } },
+        )
     }
 
     if (confirmLogout) {
@@ -272,6 +306,25 @@ fun SettingsScreen(
             dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("취소") } },
         )
     }
+}
+
+/**
+ * 온디바이스 빌드에 실제로 포함된 서드파티 구성요소. 전부 Apache License 2.0 이라 한 덩어리로 고지한다.
+ * 의존성을 추가하면 여기도 같이 갱신한다(app/build.gradle.kts, gradle/libs.versions.toml).
+ */
+private val OSS_LICENSES = """
+    TypeRight는 다음 오픈소스 구성요소를 사용합니다. 모두 Apache License 2.0 으로 배포됩니다.
+
+    · Android Jetpack (AndroidX Core, Activity, Lifecycle, SavedState, DataStore)
+    · Jetpack Compose (UI, Foundation, Material 3)
+    · Kotlin 및 kotlinx.coroutines — JetBrains
+    · Firebase Android SDK (Analytics) — Google
+
+    라이선스 전문: https://www.apache.org/licenses/LICENSE-2.0
+""".trimIndent()
+
+private fun openUrl(context: android.content.Context, url: String) {
+    runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
 }
 
 @Composable

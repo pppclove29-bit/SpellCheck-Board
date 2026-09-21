@@ -555,3 +555,48 @@ Play Billing도 같이 뺀 이유: 남겨 두면 Play Console에 인앱 상품�
 무시 목록에 없었다. 사람이 파일을 놓는 순간 커밋될 수 있는 상태였어서 먼저 막았다.
 
 검증: `ondevice`·`cloud` 양쪽 **169개 통과 / 실패 0**, `:app:bundleOndeviceRelease` 성공(서명 없음 = 의도대로).
+
+### 14.8 개인정보처리방침 · 출시 마감 작업 (2026-09-21)
+
+**방침 페이지를 저장소 안에 만들고 설정 화면에서 연다.** 지금까지 방침 URL 상수는 AI 동의 팝업에서만 쓰여
+이번 빌드에서는 화면에 아예 나오지 않았다. 키보드는 Play가 입력 데이터 취급을 특히 깐깐히 보고(B3)
+사용자도 가장 의심하는 종류의 앱이라, 링크를 눈에 보이는 곳에 두는 편이 낫다.
+
+- `site/privacy/index.html` — 방침 본문. `site/index.html` — 한 줄짜리 진입 페이지.
+- `.github/workflows/pages.yml` — **`site/`만** 배포한다. 기본 방식인 `/docs` 배포를 쓰지 않은 이유는
+  이 레포의 `docs/`가 기획 로그·수익 추정·사람 할 일 같은 내부 메모이기 때문이다. 레포가 public이라 파일
+  자체는 이미 보이지만, 웹사이트로 렌더링해 검색에 노출시킬 이유는 없다.
+- 설정 탭 맨 아래 '정보' 카드: 개인정보처리방침 · 오픈소스 라이선스 · 버전.
+  라이선스는 온디바이스 빌드에 실제로 들어 있는 구성요소만 적었다(전부 Apache-2.0).
+- `Links.PRIVACY_POLICY_URL` → `https://pppclove29-bit.github.io/SpellCheck-Board/privacy/`
+  (자리표시였던 `typeright.notion.site` 교체). Pages 공개 설정은 사람 작업 — human-todo B1-2.
+
+**방침 문구는 코드와 한 줄씩 대조해서 썼다.** 공개 문서라 실제 동작과 어긋나면 안 되기 때문이다:
+
+| 문구 | 근거 |
+|---|---|
+| 입력한 문장을 전송·저장하지 않음 | ondevice 빌드에 텍스트가 나가는 경로가 없다(AI 호출은 `FeatureFlags.ai`에서 차단) |
+| 보안 입력란에서는 **검사 자체를 안 함** | `runLocalCheck()`이 `ui.secure`면 즉시 반환 — 규칙 엔진이 텍스트를 읽지도 않는다 |
+| 클립보드를 읽지 않음 | `setPrimaryClip`(쓰기)만 있고 `getPrimaryClip`은 코드에 없다 |
+| 계정·로그인 없음 | `FeatureFlags.auth = false` |
+| 앱 삭제 시 함께 삭제 | `allowBackup="false"` |
+| 통계에 입력 글자·앱 이름 없음 | `AnalyticsEventTest`가 자유 텍스트를 금지, 앱은 5개 버킷으로만 |
+| 광고 ID 미수집 | `google_analytics_adid_collection_enabled=false` (14.7) |
+
+초안에 있던 "기능 사용 횟수뿐"은 **부정확해서 고쳤다.** Firebase는 앱 버전·기기 모델·OS 버전·IP 기반
+대략적 지역·설치별 익명 식별자를 자동으로 수집한다. 방침에 그대로 적었다.
+
+**출시 마감 작업**
+- `versionName` `0.1.0` → **`1.0.0`**, `versionCode` 1 유지.
+- **아이콘은 지금 것으로 낼 수 있다.** 기본 안드로이드 아이콘이 아니라 파란 배경 + 흰 키보드 + 체크로 된
+  어댑티브 아이콘이고, 전경이 안전영역(중앙 66dp) 안에 들어온다. Android 13+ 테마 아이콘용
+  `<monochrome>` 도안만 빠져 있어 추가했다(없으면 시스템이 전경을 단색화하면서 흰 본체에 체크가 파묻힌다).
+  Play 스토어 등록용 512×512 PNG는 APK와 별개로 콘솔에 올려야 하므로 사람 작업으로 남는다.
+- **R8(minify)은 끈 채로 첫 출시를 낸다.** 키보드는 잘못 축소되면 사용자가 글자를 못 치는 상태가 되는데,
+  릴리스 키스토어가 아직 없어 축소된 릴리스 빌드를 실기기에서 검증할 방법이 없다. 첫 출시의 목적은
+  리텐션 측정이지 용량 절감이 아니다. 키스토어가 생기고 실기기로 한 번 훑은 뒤 켠다(human-todo C6).
+  참고로 AdMob·Billing 제거만으로 릴리스 AAB가 **14.4MB → 11.7MB**가 됐다.
+
+검증: `ondevice`·`cloud` 양쪽 **169개 통과 / 실패 0**, `:app:assembleOndeviceDebug`·`:app:bundleOndeviceRelease`·
+`:app:assembleCloudDebug` 성공. 설정 '정보' 카드는 **빌드까지만 확인했고 화면 확인은 못 했다**(에뮬레이터가
+다른 세션 차례였다).
