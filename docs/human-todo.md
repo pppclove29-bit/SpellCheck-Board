@@ -32,7 +32,7 @@ TypeRight가 가장 앞서 있지만 **혼자 먼저 보내지 않는다.**
 | 3 | **A10 릴리스 키스토어 생성** | ⬜ **없으면 업로드 자체가 불가.** 코드 쪽은 끝남 |
 | 4 | **A11 Play Console에 앱 생성** (패키지명 `com.typeright.app`) | ⬜ |
 | 5 | B1-1 앱 전용 이메일 → 방침 페이지 교체 | ✅ 2026-09-21 완료 (`musikga1116@gmail.com`) |
-| 6 | **B1-2 GitHub Pages 공개** ← **지금 바로 가능** | ⬜ Settings → Pages → Source: **GitHub Actions**. 방침 URL이 있어야 '앱 콘텐츠'를 채울 수 있다 |
+| 6 | B1-2 GitHub Pages 공개 | ✅ 2026-09-21 완료. 방침 URL 200 확인 |
 | 7 | **A9 `google-services.json` 배치** | ⬜ B2보다 **먼저** — 계측 여부에 따라 데이터 보안 답이 달라진다 |
 | 8 | **B2·B2-1 데이터 보안 양식**, **B3 IME 고지**, **A12 콘텐츠 등급·타겟 연령·광고 포함 여부** | ⬜ Play '앱 콘텐츠' 섹션 |
 
@@ -79,7 +79,7 @@ B4(환불 문구), C2(광고 보상량), D5·D6·D7.
 |---|---|---|
 | B1 | **[이번 ✅ 코드 완료]** **개인정보처리방침** — 온디바이스 전용 기준으로 작성해 `site/privacy/index.html`에 넣었고, 설정 화면 '정보' 카드에서 링크가 열린다 | — | 문구는 코드와 한 줄씩 대조해 작성했다(검사는 기기 안에서만, 보안 입력란은 검사 자체를 안 함, 클립보드는 쓰기만, 광고 ID 미수집). **동작을 바꾸면 이 페이지도 같이 고쳐야 한다** |
 | B1-1 | **[이번 ✅]** **방침 문의 이메일** → **`musikga1116@gmail.com`** 으로 교체 완료 (2026-09-21) | — | 앱 전용 주소이며 **세 앱 공용**이다. Play **스토어 등록정보의 개발자 연락처**도 같은 주소를 쓴다 |
-| B1-2 | **[이번] ▶ 지금 가능** **GitHub Pages 공개 설정** — 저장소 Settings → Pages → Source 를 **"GitHub Actions"** 로 변경 | 방침 URL이 404 → 앱의 링크와 스토어 등록 정보가 죽은 링크가 됨 | **선행 조건이던 B1-1이 끝났다 — 이제 켜도 된다.** 자리표시는 실제 주소로 교체돼 push됐다. **그동안 Actions 탭의 "Deploy privacy page to Pages" 워크플로는 실패로 뜬다 — 정상이다**(배포할 Pages 가 아직 없다). 실패 알림이 와도 무시하면 된다<br>워크플로(`.github/workflows/pages.yml`)는 이미 있다. 공개 주소: `https://pppclove29-bit.github.io/SpellCheck-Board/privacy/` . `docs/`가 아니라 **`site/`만** 배포하므로 내부 기획 문서는 사이트로 공개되지 않는다 |
+| B1-2 | **[이번 ✅]** **GitHub Pages 공개** — Settings → Pages → Source: GitHub Actions | — | **2026-09-21 공개 완료·검증됨.** `https://pppclove29-bit.github.io/SpellCheck-Board/privacy/` 가 **200** 응답, 제목 "TypeRight 개인정보처리방침", 문의 이메일 포함, 자리표시 **0건**. 이 주소를 Play '앱 콘텐츠'의 개인정보처리방침 URL 로 넣는다.<br>앞으로 `site/**` 를 push 하면 자동 배포된다. 수동 재배포는 Actions → "Deploy privacy page to Pages" → Run workflow |
 | B2 | **[이번]** **Play Console '데이터 보안' 양식 작성** — 수집 항목(입력 텍스트·이메일), 전송 여부, 암호화, 삭제 요청 경로(앱 내 계정 삭제) | Play 심사 거절 |
 | B2-1 | **[이번·A9를 하면]** **데이터 보안 양식에 '앱 활동 분석' 추가** (A9를 하는 경우) | Firebase Analytics를 켰는데 양식에 없으면 정책 위반. 수집하는 것은 이벤트 이름·횟수·enum 값뿐이고 **입력 텍스트는 전송하지 않는다**(`AnalyticsEventTest`가 강제). **광고 ID 수집은 매니페스트에서 껐으므로**(`google_analytics_adid_collection_enabled=false`) 양식에서 광고 ID는 '수집 안 함'으로 답하면 된다 |
 | B3 | **[이번]** **IME 앱 추가 고지 확인** — 키보드는 Play에서 입력 데이터 취급을 특히 깐깐하게 봄 | 심사 지연·거절 |
@@ -137,7 +137,7 @@ D3·D11~D15(🟢)는 **지금 바로 확인 가능하다.** 여기서 나온 타
 
 1. **A10 키스토어 생성** — 10분. 없으면 업로드 자체가 불가. `.jks`·비밀번호는 저장소 밖에
 2. **A11 Play Console 앱 생성** — 패키지명 `com.typeright.app`
-3. **B1-1 앱 전용 이메일** → 방침 페이지 교체 → **B1-2 Pages 공개** (순서 엄수)
+3. ~~B1-1 이메일 → B1-2 Pages 공개~~ ✅ **2026-09-21 완료** (방침 URL 200 검증)
 4. **A9 `google-services.json` 배치** — B2보다 먼저(계측 여부가 데이터 보안 답을 바꾼다)
 5. **B2·B2-1·B3·A12** — Play '앱 콘텐츠' 일괄 작성. 온디바이스 전용이라 답이 단순하다
 6. **내부 테스트 트랙에 AAB 업로드** → 여기서 TypeRight는 **대기**. 다른 두 앱이 따라올 때까지

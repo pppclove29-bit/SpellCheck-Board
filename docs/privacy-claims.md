@@ -51,7 +51,32 @@
 
 1. **B1-1 ✅** — 문의 이메일을 `musikga1116@gmail.com`으로 교체 완료 (2026-09-21, 세 앱 공용).
    Play 스토어 등록정보의 개발자 연락처도 **같은 주소**를 쓴다 — 방침과 다르면 심사에서 지적된다.
-2. **B1-2 ⬜** — GitHub Pages 공개 설정 (Settings → Pages → Source: **GitHub Actions**). 지금 바로 가능하다.
+2. **B1-2 ✅** — GitHub Pages 공개 완료 (2026-09-21).
 
-공개되면 방침 주소는 `https://pppclove29-bit.github.io/SpellCheck-Board/privacy/` 다.
+**방침은 현재 공개돼 있다: `https://pppclove29-bit.github.io/SpellCheck-Board/privacy/` (200 응답 확인).**
 이 주소를 Play '앱 콘텐츠'의 개인정보처리방침 URL로 넣는다.
+`site/**` 를 push 하면 자동 배포되므로, **여기 적힌 근거를 깨는 코드 변경은 공개 문서를 즉시 거짓으로 만든다.**
+
+## 기계로 검사되는 항목
+
+아래 표의 상당수는 `android/app/src/test/java/com/typeright/app/PrivacyClaimsTest.kt` 가 **테스트로 고정**한다
+(두 플레이버 모두에서 실행). 테스트가 깨지면 코드를 되돌리거나 방침과 이 문서를 같이 고쳐야 한다.
+
+| 방침 문장 | 테스트 |
+|---|---|
+| 광고를 표시하지 않는다 | AdMob SDK 가 클래스패스에 있는지 ↔ `FeatureFlags.ads` 일치 |
+| (결제 없음) | Play Billing SDK 존재 ↔ `FeatureFlags.billing` 일치 |
+| 광고 ID 를 수집하지 않는다 | 매니페스트의 `google_analytics_adid_collection_enabled=false` |
+| — | AdMob `APPLICATION_ID` 가 메인 매니페스트에 없을 것 (cloud 전용) |
+| 앱을 삭제하면 함께 지워진다 | `android:allowBackup="false"` |
+| 클립보드를 읽지 않는다 | 프로덕션 소스에 `getPrimaryClip` 계열 호출 없음 |
+| 연락처·위치·카메라·마이크에 접근하지 않는다 | 매니페스트에 해당 권한 없음 |
+| 저장공간은 Android 9 이하에서만 | `WRITE_EXTERNAL_STORAGE` 에 `maxSdkVersion="28"` |
+| 계정·로그인이 없고 문장을 서버로 안 보낸다 | `ai`/`auth`/`shortcutSync` 가 `cloud` 와 일치 |
+| (방침 페이지 자체) | 자리표시·TODO 없음, 문의 이메일 존재, 앱의 URL 상수가 `/privacy/` 로 끝남 |
+
+**테스트로 덮지 못한 것** (사람이 봐야 한다):
+- "보안 입력란에서는 검사 자체를 하지 않는다" — `TypeRightIME.runLocalCheck()` 의 조기 반환은
+  IME 서비스 동작이라 JVM 단위 테스트로 재현하기 어렵다. `SecureFieldDetector` 의 판정 로직만 테스트돼 있다.
+- "입력한 문장을 저장하지 않는다" — 저장 경로가 *없음*을 증명하는 것이라 기계 검사가 어렵다.
+- Firebase 가 자동 수집하는 항목 — 우리 코드가 아니라 SDK 동작이라 우리 테스트로 고정할 수 없다.

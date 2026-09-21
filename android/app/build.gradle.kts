@@ -102,6 +102,15 @@ android {
         buildConfig = true
     }
 
+    testOptions {
+        unitTests.isReturnDefaultValues = true
+        unitTests.all { test ->
+            // PrivacyClaimsTest 가 매니페스트·소스를 직접 읽어 방침 문구의 근거를 검사한다.
+            test.systemProperty("typeright.appDir", projectDir.absolutePath)
+            test.systemProperty("typeright.repoDir", rootProject.projectDir.parentFile.absolutePath)
+        }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -139,4 +148,6 @@ dependencies {
     implementation(libs.compose.material3)
     implementation(libs.compose.ui.tooling.preview)
     debugImplementation(libs.compose.ui.tooling)
+
+    testImplementation(libs.junit)
 }

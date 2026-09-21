@@ -685,3 +685,47 @@ Pillow 는 저장소 의존성이 아니다. 임시 venv 에서만 쓰고 저장
 ### 16.4 에뮬레이터 원복
 작업 전 상태를 기록해 두고, 끝난 뒤 기본 키보드(Gboard)와 활성 IME 목록을 문자 단위로 일치시켰다
 (TypeRight IME 는 다시 disable). 에뮬레이터는 세 프로젝트 공용이라 상태를 남기지 않는다.
+
+## 17. 방침을 테스트로 고정 · Pages 공개 (2026-09-21)
+
+### 17.1 Pages 공개 완료
+`https://pppclove29-bit.github.io/SpellCheck-Board/privacy/` 가 **200 응답**으로 확인됐다.
+제목·문의 이메일 정상, 자리표시 0건. 이 주소를 Play '앱 콘텐츠'의 방침 URL 로 넣는다.
+앞으로 `site/**` push 는 자동 배포된다.
+
+### 17.2 방침 문구를 테스트로 옮겼다
+방침이 **공개된 이상**, 코드 변경이 곧바로 공개 문서를 거짓으로 만들 수 있다.
+그래서 `privacy-claims.md` 의 "어느 변경이 이 문장을 깨뜨리는가" 중 **기계로 검사 가능한 것**을
+`app/src/test/.../PrivacyClaimsTest.kt` 로 옮겼다(:app 에 처음으로 단위 테스트가 생겼다).
+
+덮은 것 — 두 플레이버 모두에서 실행:
+
+| 방침 문장 | 검사 방식 |
+|---|---|
+| 광고를 표시하지 않는다 | AdMob 클래스가 클래스패스에 있는지 ↔ `FeatureFlags.ads` **일치** |
+| (결제 없음) | Play Billing 클래스 존재 ↔ `FeatureFlags.billing` 일치 |
+| 광고 ID 미수집 | 매니페스트 `google_analytics_adid_collection_enabled=false` |
+| — | AdMob `APPLICATION_ID` 가 메인 매니페스트에 없을 것 |
+| 앱 삭제 시 함께 삭제 | `allowBackup="false"` |
+| 클립보드를 읽지 않는다 | 프로덕션 소스에 `getPrimaryClip` 계열 없음 |
+| 민감 권한 없음 | 연락처·위치·카메라·마이크·SMS 권한 미선언 |
+| 저장공간은 Android 9 이하 | `maxSdkVersion="28"` |
+| 계정 없음 / 문장 미전송 | `ai`·`auth`·`shortcutSync` 가 `cloud` 와 일치 |
+| 방침 페이지 자체 | 자리표시·TODO 없음, 이메일 존재, URL 상수가 `/privacy/` 로 끝남 |
+
+SDK 검사는 `Class.forName` 을 쓴다. **플레이버마다 기대값이 반대**라(ondevice=없음, cloud=있음)
+양쪽이 다 통과한다는 것 자체가 분리가 실제로 됐다는 증거다.
+
+**테스트가 진짜로 잡는지 확인했다(mutation test).** `ProcessTextActivity` 에 `getPrimaryClip()` 호출을
+일부러 넣자 `클립보드를 읽는 코드가 없다` 가 실패했고, 되돌리니 통과했다. 통과만 하고 아무것도 막지 못하는
+테스트가 아니라는 뜻이다.
+
+한계도 적어 두었다 — 보안 입력란의 조기 반환(IME 서비스 동작), "저장 경로가 없음"의 증명,
+Firebase 자동 수집 항목은 JVM 단위 테스트로 덮지 못한다. `privacy-claims.md` 에 명시했다.
+
+### 17.3 테스트 현황
+| 모듈 | ondevice | cloud |
+|---|---|---|
+| `:keyboard` | 169 | 169 |
+| `:app` | 11 | 11 |
+| **합계** | **360개 통과 / 실패 0** | |
