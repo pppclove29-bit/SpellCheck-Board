@@ -1,3 +1,4 @@
+import org.gradle.api.tasks.PathSensitivity
 import java.util.Properties
 
 plugins {
@@ -108,6 +109,14 @@ android {
             // PrivacyClaimsTest 가 매니페스트·소스를 직접 읽어 방침 문구의 근거를 검사한다.
             test.systemProperty("typeright.appDir", projectDir.absolutePath)
             test.systemProperty("typeright.repoDir", rootProject.projectDir.parentFile.absolutePath)
+            // 매니페스트·방침 페이지는 이 태스크의 기본 입력이 아니다. 선언하지 않으면 고쳐도
+            // 테스트가 UP-TO-DATE 로 건너뛰어 낡은 결과로 통과한다.
+            test.inputs.file(File(projectDir, "src/main/AndroidManifest.xml"))
+                .withPropertyName("appManifest")
+                .withPathSensitivity(PathSensitivity.RELATIVE)
+            test.inputs.file(File(rootProject.projectDir.parentFile, "site/privacy/index.html"))
+                .withPropertyName("privacyPage")
+                .withPathSensitivity(PathSensitivity.RELATIVE)
         }
     }
 

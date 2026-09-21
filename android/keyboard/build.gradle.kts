@@ -1,3 +1,4 @@
+import org.gradle.api.tasks.PathSensitivity
 import com.android.build.api.variant.LibraryVariant
 
 plugins {
@@ -70,6 +71,13 @@ android {
         unitTests.all { test ->
             // Tests read shared/*.json via a path relative to the module dir; also exported explicitly.
             test.systemProperty("typeright.sharedDir", sharedDir.absolutePath)
+            // 이 파일들은 모듈 밖에 있어서 기본적으로 태스크 입력이 아니다. 선언하지 않으면 규칙이나
+            // 등록 정보를 고쳐도 Gradle 이 테스트를 UP-TO-DATE 로 건너뛰어 **낡은 결과로 통과한다.**
+            test.inputs.dir(sharedDir).withPropertyName("sharedRules")
+                .withPathSensitivity(PathSensitivity.RELATIVE)
+            test.inputs.file(File(sharedDir.parentFile, "docs/store-listing.md"))
+                .withPropertyName("storeListing")
+                .withPathSensitivity(PathSensitivity.RELATIVE)
         }
     }
 }
