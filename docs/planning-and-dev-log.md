@@ -402,3 +402,21 @@ backend·Android 양쪽 테스트에 연결했다. 규칙을 넓히다 오탐이
 
 ### 12.6 아직 안 한 것 (기획자 판단: 보류)
 - 클립보드 패널, 한글 예측·자동완성 — 실기기 타자감을 먼저 보고 무엇이 실제로 부족한지 확인 후 결정.
+
+## 13. 에뮬레이터 설치 확인 (2026-09-21)
+
+맥북 에뮬레이터(AVD `fearless_test`, Pixel 6 / Android 15 / arm64, `emulator-5554`)에서 사람이 직접 눌러 볼 수
+있도록 디버그 APK를 빌드해 설치했다.
+
+- **코드 변경 없음.** 계정 파일(`google-services.json`, OAuth 클라이언트, OpenAI 키)이 하나도 없는 상태에서
+  `:app:assembleDebug`가 그대로 성공했다. 12.5에서 의도한 "google-services.json 없으면 플러그인 미적용" 경로와
+  `gradle.properties` 기본값(AdMob 테스트 ID, 빈 supabaseUrl)이 실제로 빌드를 지켜 주는 것을 확인.
+- JDK: 시스템 java_home에 OpenJDK 25만 있어 AGP가 거부한다. Android Studio 번들 JBR 21로 빌드했다
+  (`JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" ./gradlew :app:assembleDebug`).
+- `SUPABASE_URL`이 비어 있어 호스트 앱이 **개발 모드 인증**(`X-Dev-User-Id`)으로 뜬다 → 구글 로그인 없이
+  온보딩 3단계를 통과할 수 있다. 실기기 구글 로그인 확인은 human-todo A 항목이 끝나야 가능.
+- 백엔드 없이 확인 가능: 규칙 교정(assets로 번들된 `korean-rules.json`), 피드백 3모드 문구, 📸 짤 카드
+  (`shareable`는 규칙 엔진 피드백에도 붙는다), 이모지 패널, 롱프레스 숫자, 진동·소리, 보안 키패드,
+  텍스트 선택 메뉴 [맛춤뻡 검사].
+- 백엔드 필요: AI 문맥 교정·쿼터·충전·PRO. 네트워크 실패는 무음 폴백이라 규칙 칩은 그대로 남는다
+  (에뮬레이터에서 로컬 백엔드는 `http://10.0.2.2:8790`).
